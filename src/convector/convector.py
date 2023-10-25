@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import yaml
 import urllib.parse
 from tqdm import tqdm
 from pathlib import Path
@@ -8,12 +9,15 @@ from pathlib import Path
 # Importing the FileHandler class
 from .handlers import FileHandler  
 
+# Config file
+CONFIG_FILE = 'convector_config.yaml'
+
 class Convector:
     def __init__(self, file_path=None, output_file=None, conversation=False, output_dir=None):
         self.file_handler = FileHandler(file_path, conversation)
         self.output_file = output_file
 
-        self.convector_root_dir = self.check_convector_root_dir()
+        self.convector_root_dir = self.get_or_set_convector_root_dir()
         
         # Define the default output directory relative to the Convector root directory
         default_output_dir = os.path.join(self.convector_root_dir, 'silo')
@@ -23,9 +27,37 @@ class Convector:
             self.output_dir = os.path.abspath(default_output_dir)
         else:
             self.output_dir = os.path.abspath(output_dir)
+    
+    def get_or_set_convector_root_dir(self):
+        try:
+            with open(CONFIG_FILE, 'r') as file:
+                config = yaml.safe_load(file)
+                convector_root_dir = config.get('CONVECTOR_ROOT_DIR', None)
+        except FileNotFoundError:
+            config = {}
+            convector_root_dir = None
+        
+        convector_root_dir = convector_root_dir or os.environ.get('CONVECTOR_ROOT_DIR')
+        
+        if not convector_root_dir:
+            convector_root_dir = self.prompt_for_convector_root_dir()
+            config['CONVECTOR_ROOT_DIR'] = convector_root_dir
+            with open(CONFIG_FILE, 'w') as file:
+                yaml.safe_dump(config, file)
+        
+        return convector_root_dir
 
-    def check_convector_root_dir(self):
-        convector_root_dir = os.environ.get('CONVECTOR_ROOT_DIR')
+    def prompt_for_convector_root_dir(self):
+        # Load existing configuration from YAML file
+        try:
+            with open(CONFIG_FILE, 'r') as file:
+                config = yaml.safe_load(file)
+                convector_root_dir = config.get('CONVECTOR_ROOT_DIR', None)
+        except FileNotFoundError:
+            config = {}
+            convector_root_dir = None
+            
+        convector_root_dir = convector_root_dir or os.environ.get('CONVECTOR_ROOT_DIR')
         
         if not convector_root_dir:
             print("Warning: CONVECTOR_ROOT_DIR is not set.")
@@ -48,8 +80,6 @@ class Convector:
             print("                    `~  CONVECTOR  ~'")
             
             # Define the default directory
-            # script_dir = os.path.dirname(__file__)
-            # default_dir = os.path.join(script_dir, '..', '..', 'silo')
             default_dir = os.path.join(os.path.expanduser('~'), 'convector')
             print(f"\nIf you continue, CONVECTOR_ROOT_DIR will be set to the default path: {default_dir}")
             
@@ -57,8 +87,13 @@ class Convector:
             user_input = input("Do you want to continue with this directory? (y/n): ").strip().lower()
             
             if user_input == 'y':
-                convector_root_dir = default_dir
+                convector_root_dir = os.path.join(os.path.expanduser('~'), 'convector')
                 print(f"Continuing with CONVECTOR_ROOT_DIR set to {convector_root_dir}")
+                
+                # Save the configuration to a YAML file
+                config['CONVECTOR_ROOT_DIR'] = convector_root_dir
+                with open(CONFIG_FILE, 'w') as file:
+                    yaml.safe_dump(config, file)
             else:
                 print("Operation aborted.")
                 exit()  # or return to the previous menu, depending on your flow
