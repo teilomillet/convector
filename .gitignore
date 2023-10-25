@@ -1,0 +1,11 @@
+# Ignore the build directory
+build/
+src/convector.egg-info/
+
+# Ignore all .log files
+*.log
+*.jsonl
+
+# Ignore all files in the tmp directory
+tmp/*
+silo/*
