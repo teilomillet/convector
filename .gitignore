@@ -8,4 +8,3 @@ src/convector.egg-info/
 
 # Ignore all files in the tmp directory
 tmp/*
-silo/*
