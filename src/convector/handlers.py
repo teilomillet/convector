@@ -3,6 +3,7 @@ import csv
 import pandas as pd
 import polars as pl
 import zstandard as zstd
+import uuid
 import io
 import os
 import random
@@ -77,7 +78,6 @@ class FileHandler:
             print(f"Error during random selection: {e}")
             return []
 
-
     def select_lines_within_bytes(self, file, target_bytes):
         selected_lines = []
         current_bytes = 0
@@ -98,7 +98,6 @@ class FileHandler:
         
         file.seek(0)  # Reset file pointer to the start
         return selected_lines
-
 
     # JSON
     def handle_json(self, input=None, output=None, instruction=None, add=None, lines=None, bytes=None, random_selection=False):
@@ -133,7 +132,6 @@ class FileHandler:
         except Exception as e:
             print(f"An unexpected error occurred while handling the JSON file: {e}")
 
-
     # JSONL
     def handle_jsonl(self, input=None, output=None, instruction=None, add=None, lines=None, bytes=None, random_selection=False, conversation=False):
         total_bytes = 0  # Counter to keep track of total bytes processed
@@ -152,8 +150,9 @@ class FileHandler:
 
                     for i, line in enumerate(file):
                         if random_selection and i not in selected_positions:
+                            print(f"Processing line number: {i}")
                             continue
-                        print(f"Processing line number: {i}")
+                            
                         if lines and i >= lines:
                             break  # Stop processing if num_lines is reached
                         
@@ -168,10 +167,7 @@ class FileHandler:
                         
                         total_bytes += line_bytes  # Update the total bytes counter
                         yield transformed_item  # Yield the transformed item for writing
-
-                        print(f"Processed and yielded line number: {i}")  # Debug print statement
-                    print("Finished processing lines.")  # Debug print statement
-                    
+     
         except Exception as e:
             print(f"An error occurred while handling the JSONL file: {e}")
 
@@ -206,7 +202,6 @@ class FileHandler:
         except Exception as e:
             print(f"An error occurred while handling the CSV file: {e}")
 
-
     # For the Parquet handler, you might consider handling DataFrame directly for random selection
     def handle_parquet(self, input=None, output=None, instruction=None, add=None, lines=None, bytes=None, random_selection=False):
         total_bytes = 0
@@ -239,8 +234,6 @@ class FileHandler:
                 
         except Exception as e:
             print(f"An error occurred while handling the Parquet file: {e}")
-
-
 
     # ZST
     def handle_zst(self, input=None, output=None, instruction=None, add=None, lines=None, bytes=None, random_selection=False):
@@ -276,7 +269,6 @@ class FileHandler:
         except Exception as e:
             print(f"An error occurred while handling the ZST file: {e}")
 
-
     # Handling the data
     def handle_data(self, data, input=None, output=None, instruction=None, add=None):
         """Main method to determine the transformation strategy based on the provided arguments."""
@@ -293,9 +285,11 @@ class FileHandler:
         return transformed_data
 
     # For nested conversation
-    def handle_conversation(self, data):
+    def handle_conversation(self, data, conversation_id=None):
         """Method to handle conversation data by extracting user and assistant messages."""
         transformed_data = []
+
+        conversation_id = conversation_id or uuid.uuid4().hex[:5]
 
         # Extracting the 'data' field from the JSON object
         conversation_data = data.get('data', [])
@@ -308,6 +302,7 @@ class FileHandler:
                 
                 # Creating an object for each pair of messages
                 transformed_data.append({
+                    "conversation_id": conversation_id,
                     "instruction": "",
                     "input": user_input,
                     "output": assistant_output
