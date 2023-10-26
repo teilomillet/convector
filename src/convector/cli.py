@@ -13,6 +13,8 @@ CONFIG_FILE = 'convector_config.yaml'
 def convector():
     """
     Convector - A tool for transforming conversational data to a unified format.
+
+    For more detailed information and examples, use --verbose.
     """
     pass
 
@@ -34,6 +36,9 @@ def convector():
 def transform(file_path, conversation, input, output, instruction, add, lines, bytes, output_file, output_dir, append, verbose, random):
     """
     Transform conversational data in FILE_PATH to a unified format.
+
+    Example:
+        convector transform /path/to/data --conversation --input user --output bot
     """
     config_handler = ConfigurationHandler(CONFIG_FILE)
     user_interaction = UserInteraction()
