@@ -5,6 +5,7 @@ import polars as pl
 import zstandard as zstd
 import io
 import os
+import random
 
 class FileHandler:
     def __init__(self, file_path, conversation=False):

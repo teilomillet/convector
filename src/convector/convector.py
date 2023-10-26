@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import yaml
+import random
 import urllib.parse
 from tqdm import tqdm
 from pathlib import Path
@@ -12,25 +13,15 @@ from .handlers import FileHandler
 # Config file
 CONFIG_FILE = 'convector_config.yaml'
 
-class Convector:
-    def __init__(self, file_path=None, output_file=None, conversation=False, output_dir=None):
-        self.file_handler = FileHandler(file_path, conversation)
-        self.output_file = output_file
+# ConfigurationHandler is responsible for managing configurations such as CONVECTOR_ROOT_DIR.
+class ConfigurationHandler:
+    def __init__(self, config_file):
+        self.config_file = config_file
 
-        self.convector_root_dir = self.get_or_set_convector_root_dir()
-        
-        # Define the default output directory relative to the Convector root directory
-        default_output_dir = os.path.join(self.convector_root_dir, 'silo')
-        
-        # If output_dir is not specified, use the default output directory
-        if output_dir is None:
-            self.output_dir = os.path.abspath(default_output_dir)
-        else:
-            self.output_dir = os.path.abspath(output_dir)
-    
+    # Retrieve or set the CONVECTOR_ROOT_DIR from/to the configuration file or environment variables.
     def get_or_set_convector_root_dir(self):
         try:
-            with open(CONFIG_FILE, 'r') as file:
+            with open(self.config_file, 'r') as file:
                 config = yaml.safe_load(file)
                 convector_root_dir = config.get('CONVECTOR_ROOT_DIR', None)
         except FileNotFoundError:
@@ -38,16 +29,26 @@ class Convector:
             convector_root_dir = None
         
         convector_root_dir = convector_root_dir or os.environ.get('CONVECTOR_ROOT_DIR')
-        
-        if not convector_root_dir:
-            convector_root_dir = self.prompt_for_convector_root_dir()
-            config['CONVECTOR_ROOT_DIR'] = convector_root_dir
-            with open(CONFIG_FILE, 'w') as file:
-                yaml.safe_dump(config, file)
-        
         return convector_root_dir
 
-    def prompt_for_convector_root_dir(self):
+    # Update a specific configuration key in the configuration file.
+    def update_config(self, key, value):
+        try:
+            with open(self.config_file, 'r') as file:
+                config = yaml.safe_load(file)
+        except FileNotFoundError:
+            config = {}
+        
+        config[key] = value
+        with open(self.config_file, 'w') as file:
+            yaml.safe_dump(config, file)
+
+# UserInteraction handles interactions with the user, such as receiving inputs.
+class UserInteraction:
+    @staticmethod
+
+    # Functionality for user interaction to set the CONVECTOR_ROOT_DIR.
+    def prompt_for_convector_root_dir():
         # Load existing configuration from YAML file
         try:
             with open(CONFIG_FILE, 'r') as file:
@@ -99,76 +100,105 @@ class Convector:
                 exit()  # or return to the previous menu, depending on your flow
         
         return convector_root_dir
-            
-    def process_and_save(self, transformed_data_generator, total_lines=None, bytes=None, append=False):
-        progress_bar=None # Initialize here
-        output_file_path = None  # Initialize here
-        lines_written = 0  # Initialize here
-        total_bytes_written = 0  # Initialize here
-        
+
+# Convector is the main class handling the transformation process of the conversational data.
+class Convector:
+    # Initialization of the Convector object with necessary handlers and configurations.
+    def __init__(self, config_handler, user_interaction, file_handler, output_file=None, output_dir=None):
+        self.config_handler = config_handler
+        self.user_interaction = user_interaction
+        self.file_handler = file_handler
+        self.output_file = output_file
+
+        self.convector_root_dir = self.config_handler.get_or_set_convector_root_dir()
+        self.set_output_dir(output_dir)
+    
+    # Set the output directory where the transformed files will be saved.
+    def set_output_dir(self, output_dir):
+        default_output_dir = os.path.join(self.convector_root_dir, 'silo')
+        self.output_dir = os.path.abspath(output_dir or default_output_dir)
+    
+    # Determine the output file path based on the provided or default configurations.
+    def get_output_file_path(self):
+        if self.output_file:
+            return os.path.join(self.output_dir, self.output_file)
+        else:
+            output_base_name = os.path.splitext(os.path.basename(self.file_handler.file_path))[0] + '_tr.jsonl'
+            return os.path.join(self.output_dir, output_base_name)
+
+    # Write transformed items to the output file.
+    def write_to_file(self, file, item, lines_written, total_bytes_written, total_lines, bytes):
         try:
-            # If an output_file is specified, use it; otherwise, create a name based on the input file
-            if self.output_file:
-                output_file_path = os.path.join(self.output_dir, self.output_file)
-            else:
-                output_base_name = os.path.splitext(os.path.basename(self.file_handler.file_path))[0] + '_tr.jsonl'
-                output_file_path = os.path.join(self.output_dir, output_base_name)
-                
-            # Check if the file exists and whether to append or overwrite
-            if os.path.exists(output_file_path) and not append:
-                user_input = input(f"File {output_file_path} already exists. Do you want to overwrite it? (y/n): ").strip().lower()
-                if user_input != 'y':
-                    print("Transformation aborted.")
-                    return
+            if total_lines and lines_written >= total_lines:
+                return lines_written, total_bytes_written, True
             
-            mode = 'a' if os.path.exists(output_file_path) and append else 'w'
+            item['source'] = os.path.basename(self.file_handler.file_path)
+            json_line = json.dumps(item, ensure_ascii=False) + '\n'
+            line_bytes = len(json_line.encode('utf-8'))
             
-            lines_written = 0
-            total_bytes_written = 0  # Track the total bytes written to the file
-
-            os.makedirs(os.path.dirname(output_file_path), exist_ok=True)  # Create directories
+            if bytes and (total_bytes_written + line_bytes) > bytes:
+                return lines_written, total_bytes_written, True
             
-            with open(output_file_path, mode, encoding='utf-8') as file:
-                # Progress bar will show even if total_lines is not known
-                total = bytes or total_lines
-                unit = " bytes" if bytes else " lines"
-                progress_bar = tqdm(total=total, unit=unit, position=0, desc="Processing")
-                
-                for items in transformed_data_generator:
-                    for item in items:
-                        if total_lines and lines_written >= total_lines:
-                            # print("\nReached line limit. Stopping writing.")
-                            return
-                        
-                        item['source'] = os.path.basename(self.file_handler.file_path)
-                        json_line = json.dumps(item, ensure_ascii=False) + '\n'
-                        line_bytes = len(json_line.encode('utf-8'))
-                        
-                        if bytes and (total_bytes_written + line_bytes) > bytes:
-                            # print("\nReached byte limit. Stopping writing.")
-                            return
-                        
-                        file.write(json_line)
-                        total_bytes_written += line_bytes  # Update the total bytes written
-                        lines_written += 1
-                        progress_bar.update(1)
-                
-                progress_bar.close()
-                
+            file.write(json_line)
+            return lines_written + 1, total_bytes_written + line_bytes, False
         except Exception as e:
-            print(f"An error occurred while processing and saving the file: {e}")
+            print(f"An error occurred while writing to the file: {e}")
+            raise
 
-        finally:
-            # This block will execute whether an exception was raised or not
-            if progress_bar:  # Check if progress_bar is not None
-                progress_bar.close()
-        
-            # Create a clickable URL
-            if output_file_path:  # Check if output_file_path is not None
-                relative_path = os.path.relpath(output_file_path, start=Path.cwd())
-                print(f"\nDelivered to file://{relative_path} \n({lines_written} lines, {total_bytes_written} bytes)")
+    # Process the transformed data and save it to the output file.
+    def process_and_save(self, transformed_data_generator, total_lines=None, bytes=None, append=False):
+        try:
+            progress_bar = None
+            output_file_path = self.get_output_file_path()
+            lines_written, total_bytes_written = 0, 0
+            
+            try:
+                os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
+                mode = 'a' if os.path.exists(output_file_path) and append else 'w'
+                with open(output_file_path, mode, encoding='utf-8') as file:
+                    total = bytes or total_lines or 0  # Ensure total is never None
+                    unit = " bytes" if bytes else " lines"
+                    progress_bar = tqdm(total=total, unit=unit, position=0, desc="Processing", leave=True)
+                    
+                    for items in transformed_data_generator:
+                        for item in items:
+                            lines_written, total_bytes_written, done = self.write_to_file(file, item, lines_written, total_bytes_written, total_lines, bytes)
+                            progress_bar.update(1)
+                            if done:
+                                return
+                    
+                    progress_bar.close()
+                    
+            except Exception as e:
+                    print(f"An error occurred while processing and saving the file: {e}")
+            finally:
+                if progress_bar:
+                    progress_bar.close()
+                self.display_results(output_file_path, lines_written, total_bytes_written)
+        except FileNotFoundError:
+            print("Error: Output directory does not exist and could not be created.")
+        except IOError as e:
+            print(f"IO Error: {e}")
+        except Exception as e:
+            print(f"An unexpected error occurred while processing and saving the file: {e}")
 
-    def transform(self, input=None, output=None, instruction=None, add=None, lines=None, bytes=None, append=False):
+    # Display the results after the transformation process.
+    def display_results(self, output_file_path, lines_written, total_bytes_written):
+        relative_path = os.path.relpath(output_file_path, start=Path.cwd())
+        print(f"\nDelivered to file://{relative_path} \n({lines_written} lines, {total_bytes_written} bytes)")
+
+    def random_lines(self, lines_to_select):
+        """
+        Randomly select specified number of lines from the file.
+        """
+        with open(self.file_handler.file_path, 'r') as file:
+            lines = file.readlines()
+            selected_lines = random.sample(lines, min(lines_to_select, len(lines)))
+        return selected_lines
+
+   # Main transformation function to handle the transformation of conversational data.
+    def transform(self, input=None, output=None, instruction=None, add=None, lines=None, bytes=None, append=False, random=False):
+        try:    
             # Validating the existence of the input file
             if not os.path.exists(self.file_handler.file_path):
                 print(f"Error: The file '{self.file_handler.file_path}' does not exist.")
@@ -182,35 +212,24 @@ class Convector:
             
             if handler_method:
                 print(f"Charging .{file_extension[1:]} file...")
+                
+                # If random flag is set, get randomly selected lines
+                if random and lines:
+                    lines_to_process = self.random_lines(lines)
+                else:
+                    lines_to_process = None  # or however you want to handle non-random case
+                
                 transformed_data_generator = handler_method(input=input, output=output,
                                                             instruction=instruction, add=add,
-                                                            lines=lines, bytes=bytes)
+                                                            lines=lines_to_process, bytes=bytes)
                 
                 # Processing and saving the transformed data considering the byte size limit
                 self.process_and_save(transformed_data_generator, total_lines=lines, bytes=bytes, append=append)
             else:
                 print(f"Error: Unsupported file extension '{file_extension}'")
-
-
-# CLI execution
-def main():
-    parser = argparse.ArgumentParser(description='Transform conversational data to a unified format.')
-    parser.add_argument('file_path', help='Path to the file to be processed.')
-    parser.add_argument('--conversation', action='store_true', help='Specify if the data is in a conversational format.')
-    parser.add_argument('--input', help='Key for user inputs in the data.')
-    parser.add_argument('--output', help='Key for bot outputs in the data.')
-    parser.add_argument('--instruction', help='Key for instructions or system messages in the data.')
-    parser.add_argument('--add', help='Comma-separated column names to keep in the transformed data.')
-    parser.add_argument('--lines', type=int, help='Number of lines to process from the file.')
-    parser.add_argument('--bytes', type=int, help='Number of bytes to process from the file.')
-    parser.add_argument('--output_file', help='Path to the output file where transformed data will be saved.')
-    parser.add_argument('--output_dir', help='Specify a custom directory where the output file will be saved.')
-    parser.add_argument('--append', action='store_true', help='Specify whether to append to or overwrite an existing file.')
-
-    args = parser.parse_args()   
-    convector = Convector(args.file_path, args.output_file, args.conversation, args.output_dir)
-    convector.transform(input=args.input, output=args.output, instruction=args.instruction, 
-                        add=args.add, lines=args.lines, bytes=args.bytes, append=args.append)
-
-if __name__ == "__main__":
-    main()
+        except FileNotFoundError:
+            print(f"Error: The file '{self.file_handler.file_path}' does not exist.")
+        except AttributeError:
+            print(f"Error: Unsupported file extension '{file_extension}'.")
+        except Exception as e:
+            print(f"An unexpected error occurred while transforming the file: {e}")

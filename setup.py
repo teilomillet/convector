@@ -52,7 +52,7 @@ setup(
     
     entry_points={  # Creating executable commands
         'console_scripts': [
-            'convector=convector.convector:main',
+            'convector=convector.cli:convector', # 'cli' refers to the name of main group function
         ],
     },
     
