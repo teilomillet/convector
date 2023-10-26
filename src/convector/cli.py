@@ -40,7 +40,7 @@ def transform(file_path, conversation, input, output, instruction, add, lines, b
     file_handler = FileHandler(file_path, conversation)
 
     convector = Convector(config_handler, user_interaction, file_handler, output_file, output_dir)
-    convector.transform(input=input, output=output, instruction=instruction, add=add, lines=lines, bytes=bytes, append=append)
+    convector.transform(input=input, output=output, instruction=instruction, add=add, lines=lines, bytes=bytes, append=append, random_selection=random)
 
 
 @convector.group()

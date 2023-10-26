@@ -187,17 +187,8 @@ class Convector:
         relative_path = os.path.relpath(output_file_path, start=Path.cwd())
         print(f"\nDelivered to file://{relative_path} \n({lines_written} lines, {total_bytes_written} bytes)")
 
-    def random_lines(self, lines_to_select):
-        """
-        Randomly select specified number of lines from the file.
-        """
-        with open(self.file_handler.file_path, 'r') as file:
-            lines = file.readlines()
-            selected_lines = random.sample(lines, min(lines_to_select, len(lines)))
-        return selected_lines
-
    # Main transformation function to handle the transformation of conversational data.
-    def transform(self, input=None, output=None, instruction=None, add=None, lines=None, bytes=None, append=False, random=False):
+    def transform(self, input=None, output=None, instruction=None, add=None, lines=None, bytes=None, append=False, random_selection=False):
         try:    
             # Validating the existence of the input file
             if not os.path.exists(self.file_handler.file_path):
@@ -209,19 +200,19 @@ class Convector:
 
             print(f"File: {self.file_handler.file_path}")
             handler_method = getattr(self.file_handler, f"handle_{file_extension[1:]}", None)
-            
+
+            # Prompting user for number of lines or bytes if random_selection is True and neither is specified
+            if random_selection and not lines and not bytes:
+                if True:
+                    print("Error: Please specify the number of lines or bytes when using random selection.")
+                    return
+
             if handler_method:
                 print(f"Charging .{file_extension[1:]} file...")
                 
-                # If random flag is set, get randomly selected lines
-                if random and lines:
-                    lines_to_process = self.random_lines(lines)
-                else:
-                    lines_to_process = None  # or however you want to handle non-random case
-                
                 transformed_data_generator = handler_method(input=input, output=output,
                                                             instruction=instruction, add=add,
-                                                            lines=lines_to_process, bytes=bytes)
+                                                            lines=lines, bytes=bytes, random_selection=random_selection)
                 
                 # Processing and saving the transformed data considering the byte size limit
                 self.process_and_save(transformed_data_generator, total_lines=lines, bytes=bytes, append=append)
