@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import yaml
+import logging
 import random
 import urllib.parse
 from tqdm import tqdm
@@ -11,37 +12,93 @@ from pathlib import Path
 from .handlers import FileHandler  
 
 # Config file
-CONFIG_FILE = 'convector_config.yaml'
+CONFIG_FILE = 'setup.yaml'
 
-# ConfigurationHandler is responsible for managing configurations such as CONVECTOR_ROOT_DIR.
-class ConfigurationHandler:
-    def __init__(self, config_file):
-        self.config_file = config_file
+# Default Config
+DEFAULT_CONFIG = {
+    'version': 1.0,
+    'settings': {
+        'CONVECTOR_ROOT_DIR': str(Path.home() / 'convector'),
+        'default_profile': 'default',
+    },
+    'profiles': {
+        'default': {
+            'output_dir': 'silo',
+            'conversation': False,
+            'input': None,
+            'output': None,
+            'instruction': None,
+            'additional_fields': [],
+            'lines': 1000,
+            'bytes': None,
+            'append': False,
+            'random_selection': False,
+        },
+        'Conversation': {
+            'output_dir': 'silo',
+            'conversation': True,
+            'input': None,
+            'output': None,
+            'instruction': None,
+            'additional_fields': [],
+            'lines': None,
+            'bytes': None,
+            'append': False,
+            'random_selection': False,
+        },
+    }
+}
 
-    # Retrieve or set the CONVECTOR_ROOT_DIR from/to the configuration file or environment variables.
-    def get_or_set_convector_root_dir(self):
+def check_or_create_config():
+    if not os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, 'w') as file:
+            yaml.safe_dump(DEFAULT_CONFIG, file)
+        print(f"Created default configuration file at {CONFIG_FILE}")
+
+# Call this function at the beginning of your program
+check_or_create_config()
+
+
+# ConfigLoader is responsible for managing configurations such as CONVECTOR_ROOT_DIR.
+class ConfigLoader:
+    def __init__(self, yaml_file, cli_args):
+        self.yaml_config = self.load_yaml(yaml_file)
+        self.cli_args = cli_args
+        self.final_config = self.merge_configs()
+        print(self.yaml_config)
+
+    def load_yaml(self, yaml_file):
         try:
-            with open(self.config_file, 'r') as file:
+            with open(yaml_file, 'r') as file:
                 config = yaml.safe_load(file)
-                convector_root_dir = config.get('CONVECTOR_ROOT_DIR', None)
+            # Optionally validate config here
+            return config
         except FileNotFoundError:
-            config = {}
-            convector_root_dir = None
-        
-        convector_root_dir = convector_root_dir or os.environ.get('CONVECTOR_ROOT_DIR')
-        return convector_root_dir
+            logging.error(f"YAML file {yaml_file} not found.")
+            return {}
+        except yaml.YAMLError as e:
+            logging.error(f"Error parsing YAML file: {e}")
+            return {}
 
-    # Update a specific configuration key in the configuration file.
-    def update_config(self, key, value):
-        try:
-            with open(self.config_file, 'r') as file:
-                config = yaml.safe_load(file)
-        except FileNotFoundError:
-            config = {}
+    def merge_configs(self):
+        # Start with settings from the default profile
+        default_profile_name = self.yaml_config.get('settings', {}).get('default_profile', 'default')
+        final_config = self.yaml_config.get('profiles', {}).get(default_profile_name, {}).copy()
         
-        config[key] = value
-        with open(self.config_file, 'w') as file:
-            yaml.safe_dump(config, file)
+        # If another profile is specified, update the final config with it
+        profile_name = self.cli_args.get('profile')
+        if profile_name:
+            profile_config = self.yaml_config.get('profiles', {}).get(profile_name)
+            if profile_config:
+                final_config.update(profile_config)
+            else:
+                logging.warning(f"Profile {profile_name} not found in YAML.")
+        
+        # CLI arguments should override YAML config and selected profile
+        final_config.update({k: v for k, v in self.cli_args.items() if v is not None})
+        return final_config
+
+
 
 # UserInteraction handles interactions with the user, such as receiving inputs.
 class UserInteraction:
@@ -104,19 +161,26 @@ class UserInteraction:
 # Convector is the main class handling the transformation process of the conversational data.
 class Convector:
     # Initialization of the Convector object with necessary handlers and configurations.
-    def __init__(self, config_handler, user_interaction, file_handler, output_file=None, output_dir=None):
-        self.config_handler = config_handler
+    def __init__(self, config, user_interaction, file_handler, output_file=None, output_dir=None):
+        self.config = config  # Initialize self.config here
         self.user_interaction = user_interaction
         self.file_handler = file_handler
         self.output_file = output_file
+        self.output_dir = self.config.get('output_dir', 'silo')
 
-        self.convector_root_dir = self.config_handler.get_or_set_convector_root_dir()
-        self.set_output_dir(output_dir)
-    
-    # Set the output directory where the transformed files will be saved.
+        self.convector_root_dir = self.config.get('CONVECTOR_ROOT_DIR')
+        if self.convector_root_dir is None:
+            self.convector_root_dir = self.default_convector_root_dir()
+
+    def default_convector_root_dir(self):
+        # Define and return the default directory
+        return str(Path.home() / 'convector')
+
     def set_output_dir(self, output_dir):
+        if self.convector_root_dir is None:
+            raise ValueError("convector_root_dir is not set.")
+        
         default_output_dir = os.path.join(self.convector_root_dir, 'silo')
-        self.output_dir = os.path.abspath(output_dir or default_output_dir)
     
     # Determine the output file path based on the provided or default configurations.
     def get_output_file_path(self):
@@ -182,10 +246,9 @@ class Convector:
         except Exception as e:
             print(f"An unexpected error occurred while processing and saving the file: {e}")
 
-    # Display the results after the transformation process.
     def display_results(self, output_file_path, lines_written, total_bytes_written):
-        relative_path = os.path.relpath(output_file_path, start=Path.cwd())
-        print(f"\nDelivered to file://{relative_path} \n({lines_written} lines, {total_bytes_written} bytes)")
+        absolute_path = Path(output_file_path).resolve()
+        print(f"\nDelivered to file://{absolute_path} \n({lines_written} lines, {total_bytes_written} bytes)")
 
    # Main transformation function to handle the transformation of conversational data.
     def transform(self, input=None, output=None, instruction=None, add=None, lines=None, bytes=None, append=False, random_selection=False):

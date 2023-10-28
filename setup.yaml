@@ -1,0 +1,28 @@
+version: 1.0
+settings:
+  CONVECTOR_ROOT_DIR: "../convector"  # Replace with the actual path
+  default_profile: "default"
+profiles:
+  default:
+    output_dir: "silo"
+    conversation: false
+    input: null
+    output: null
+    instruction: null
+    additional_fields: []
+    lines: 1000
+    bytes: null
+    append: false
+    random_selection: false
+  Conversation:
+    output_dir: "silo"
+    conversation: true
+    input: null
+    output: null
+    instruction: null
+    additional_fields: []
+    lines: null
+    bytes: null
+    append: false
+    random_selection: false
+
