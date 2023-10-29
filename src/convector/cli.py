@@ -3,7 +3,7 @@ import os
 import yaml
 
 # Importing necessary classes and functions
-from .convector import Convector, ConfigLoader, UserInteraction, FileHandler
+from .convector import Convector, config_manager, ConfigLoader, UserInteraction, FileHandler
 
 
 CONFIG_FILE = 'setup.yaml'
@@ -65,7 +65,7 @@ def transform(file_path, conversation, input, output, instruction, add, lines, b
     }
 
     # Create an instance of ConfigLoader to get the final configuration
-    config_loader = ConfigLoader(CONFIG_FILE, cli_args)
+    config_loader = ConfigLoader(config_manager, cli_args)
     final_config = config_loader.final_config
 
     # Validate the final config
