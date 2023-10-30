@@ -3,7 +3,9 @@ import os
 import yaml
 
 # Importing necessary classes and functions
-from .convector import Convector, config_manager, ConfigLoader, UserInteraction, FileHandler
+from .core.base_file_handler import BaseFileHandler
+from .core.file_handler_factory import FileHandlerFactory
+from .convector import Convector, config_manager, ConfigLoader, UserInteraction
 
 
 CONFIG_FILE = 'setup.yaml'
@@ -39,12 +41,13 @@ def validate_config(final_config):
 @click.option('--append', is_flag=True, help='Specify whether to append to or overwrite an existing file.')
 @click.option('--verbose', is_flag=True, help='Enable verbose mode for detailed logs.')
 @click.option('--random', is_flag=True, help='Randomly select lines from the file.')
-def transform(file_path, conversation, input, output, instruction, add, lines, bytes, output_file, output_dir, append, verbose, random, profile):
+@click.option('--output_schema', default=None, help='Output schema to use for the transformed data.')
+def process(file_path, conversation, input, output, instruction, add, lines, bytes, output_file, output_dir, append, verbose, random, profile, output_schema):
     """
-    Transform conversational data in FILE_PATH to a unified format.
+    Process conversational data in FILE_PATH to a unified format.
 
     Example:
-        convector transform /path/to/data --conversation --input user --output bot
+        convector process /path/to/data --conversation --input user --output bot
     """
     # Define the CLI arguments in a dictionary
     cli_args = {
@@ -61,7 +64,8 @@ def transform(file_path, conversation, input, output, instruction, add, lines, b
         'append': append,
         'verbose': verbose,
         'random': random,
-        'profile': profile  # This is for selecting a profile from YAML
+        'profile': profile, # This is for selecting a profile from YAML
+        'output_schema': output_schema,  
     }
 
     # Create an instance of ConfigLoader to get the final configuration
@@ -79,21 +83,27 @@ def transform(file_path, conversation, input, output, instruction, add, lines, b
     convector = Convector(
         final_config, 
         UserInteraction(), 
-        FileHandler(final_config['file_path'], final_config['conversation']), 
+        final_config['file_path'],  # This should be a string
+        final_config.get('conversation'),  # Pass this as needed
         final_config.get('output_file'),  # Use get() for optional keys
-        final_config.get('output_dir')    # Use get() for optional keys
+        final_config.get('output_dir'),    # Use get() for optional keys
+        final_config.get('output_schema'),
     )
 
-    convector.transform(
-        input=final_config['input'] if 'input' in final_config else None,
-        output=final_config['output']if 'output' in final_config else None,
-        instruction=final_config['instruction'] if 'instruction' in final_config else None,
-        add=final_config['add'] if 'add' in final_config else None,
-        lines=final_config['lines'] if 'lines' in final_config else None,
-        bytes=final_config['bytes'] if 'bytes' in final_config else None,
-        append=final_config['append'] if 'append' in final_config else None,
-        random_selection=final_config['random'] if 'random' in final_config else None
+
+    # Call the process method from the Convector class
+    convector.process(
+        input=final_config.get('input'),
+        output=final_config.get('output'),
+        instruction=final_config.get('instruction'),
+        add=final_config.get('add'),
+        lines=final_config.get('lines'),
+        bytes=final_config.get('bytes'),
+        append=final_config.get('append'),
+        random_selection=final_config.get('random'),
+        output_schema=final_config.get('output_schema'),
     )
+
 
 
 

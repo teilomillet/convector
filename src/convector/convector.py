@@ -4,12 +4,17 @@ import os
 import yaml
 import logging
 import random
+import traceback
 import urllib.parse
 from tqdm import tqdm
 from pathlib import Path
 
-# Importing the FileHandler class
-from .handlers import FileHandler  
+from convector.core.base_file_handler import BaseFileHandler
+from convector.core.file_handler_factory import FileHandlerFactory
+from convector.data_processors.data_processors import IDataProcessor, ConversationDataProcessor, CustomKeysDataProcessor, AutoDetectDataProcessor
+from convector.utils.output_schema_handler import OutputSchemaHandler
+from convector.utils.random_selector import IRandomSelector, LineRandomSelector, ByteRandomSelector, ConversationRandomSelector
+
 
 # Config file
 CONFIG_FILE = 'setup.yaml'
@@ -33,6 +38,7 @@ DEFAULT_CONFIG = {
             'bytes': None,
             'append': False,
             'random_selection': False,
+            'output_schema': 'default',
         },
         'Conversation': {
             'output_dir': 'silo',
@@ -45,6 +51,7 @@ DEFAULT_CONFIG = {
             'bytes': None,
             'append': False,
             'random_selection': False,
+            'output_schema': 'default',
         },
     }
 }
@@ -58,7 +65,6 @@ def check_or_create_config():
 # Call this function at the beginning of your program
 check_or_create_config()
 
-
 # Configuration Class
 class Configuration:
     def __init__(self, config_file='setup.yaml'):
@@ -68,7 +74,10 @@ class Configuration:
     def load_or_create_config(self):
         try:
             with open(self.config_file, 'r') as file:
-                return yaml.safe_load(file)
+                config = yaml.safe_load(file)
+                if 'data_processor' not in config:
+                    config['data_processor'] = 'AutoDetect'  # Default value
+                return config
         except FileNotFoundError:
             print(f"Creating default configuration file at {self.config_file}")
             self.save_config(DEFAULT_CONFIG)
@@ -99,8 +108,7 @@ class Configuration:
             self.save_config(config_data)
             
         return convector_root_dir
-
-        
+    
 # Initialize Configuration
 config_manager = Configuration()
 
@@ -124,6 +132,11 @@ class ConfigLoader:
             else:
                 logging.warning(f"Profile {profile_name} not found in YAML.")
         
+        # Adding the new key 'data_processor' from YAML if it exists
+        data_processor = self.yaml_config.get('data_processor')
+        if data_processor:
+            final_config['data_processor'] = data_processor
+
         final_config.update({k: v for k, v in self.cli_args.items() if v is not None})
         return final_config
 
@@ -198,6 +211,21 @@ class UserInteraction:
                 exit()
         
         return convector_root_dir
+    
+    @staticmethod
+    def prompt_for_data_processor():
+        """
+        Prompt the user to select a data processor if it's not set in the configuration.
+        """
+        print("Data Processor is not set.")
+        print("Available Options: AutoDetect, CustomKeys, Conversation")
+        user_input = input("Select a data processor from the options: ").strip()
+        
+        if user_input not in ['AutoDetect', 'CustomKeys', 'Conversation']:
+            print("Invalid choice. Using 'AutoDetect' as the default.")
+            return 'AutoDetect'
+        
+        return user_input
 
 logging.basicConfig(level=logging.INFO)
 
@@ -206,22 +234,30 @@ class Convector:
     """
     Convector is the main class handling the transformation process of conversational data.
     """
-    def __init__(self, config, user_interaction, file_handler, output_file=None, output_dir=None):
+    def __init__(self, config, user_interaction, file_path, conversation, output_schema, output_file=None, output_dir=None):
         """Initialization of the Convector object with necessary handlers and configurations."""
-        self.config = config  # Assuming this is the final merged configuration
+        self.config = config  # Final merged configuration
         self.user_interaction = user_interaction
-        self.file_handler = file_handler
         self.output_file = output_file
         self.output_dir = self.config.get('output_dir', 'silo')
+
+        # Get output_schema from config if it is not passed explicitly
+        output_schema = output_schema or self.config.get('output_schema', 'default')
+        # Initialize OutputSchemaHandler
+        self.output_schema_handler = OutputSchemaHandler(output_schema)
+        
+
+        # Initialize the FileHandler using the FileHandlerFactory
+        self.file_handler = FileHandlerFactory.create_file_handler(file_path, conversation)
         
         # Retrieve or prompt for CONVECTOR_ROOT_DIR
         self.convector_root_dir = config_manager.prompt_for_convector_root_dir()
         
         # If CONVECTOR_ROOT_DIR is still None, then call a method to determine it
         if self.convector_root_dir is None:
-            config_manager.prompt_for_convector_root_dir()
             self.convector_root_dir = config_manager.config_data.get('settings', {}).get('CONVECTOR_ROOT_DIR', None)
-        
+
+
     # Determine the output file path based on the provided or default configurations.
     def get_output_file_path(self):
         if self.output_file:
@@ -231,22 +267,36 @@ class Convector:
             output_base_name = input_path.stem + '_tr.jsonl'
             return Path(self.output_dir) / output_base_name
 
-
-    def write_to_file(self, file, item, lines_written, total_bytes_written, total_lines, bytes):
+    def write_to_file(self, file, item, lines_written, total_bytes_written, total_lines, bytes, output_schema_handler):
         """
         Write transformed items to the output file.
         """
         try:
             if total_lines and lines_written >= total_lines:
                 return lines_written, total_bytes_written, True
-            
-            item['source'] = os.path.basename(self.file_handler.file_path)
-            json_line = json.dumps(item, ensure_ascii=False) + '\n'
+
+            # Transform the item based on the output schema
+            if output_schema_handler is not None:  
+                transformed_item = output_schema_handler.apply_schema(item)
+            else:
+                transformed_item = item
+
+            try:
+                if not isinstance(transformed_item, dict):
+                    print(f"Error: Expected a dictionary but got {type(transformed_item)}")
+                    # handle the error appropriately, perhaps with a 'raise' or 'return'
+                else:
+                    transformed_item['source'] = os.path.basename(self.file_handler.file_path)
+            except Exception as e:
+                print(f"An exception occurred: {e}")  # Debug
+                raise
+
+            json_line = json.dumps(transformed_item, ensure_ascii=False) + '\n'
             line_bytes = len(json_line.encode('utf-8'))
-            
+
             if bytes and (total_bytes_written + line_bytes) > bytes:
                 return lines_written, total_bytes_written, True
-            
+
             file.write(json_line)
             return lines_written + 1, total_bytes_written + line_bytes, False
         except Exception as e:
@@ -257,6 +307,9 @@ class Convector:
         """
         Process the transformed data and save it to the output file.
         """
+
+        lines_written, total_bytes_written = 0, 0
+
         try:
             progress_bar = None
             output_file_path = self.get_output_file_path()
@@ -271,8 +324,12 @@ class Convector:
                     progress_bar = tqdm(total=total, unit=unit, position=0, desc="Processing", leave=True)
                     
                     for items in transformed_data_generator:
+                        if isinstance(items, dict):  # if items is a single dictionary
+                            items = [items]
                         for item in items:
-                            lines_written, total_bytes_written, done = self.write_to_file(file, item, lines_written, total_bytes_written, total_lines, bytes)
+                            lines_written, total_bytes_written, done = self.write_to_file(
+                                file, item, lines_written, total_bytes_written, total_lines, bytes, self.output_schema_handler
+                            )
                             progress_bar.update(1)
                             if done:
                                 return
@@ -302,44 +359,29 @@ class Convector:
             return False
         return True
 
-    def get_handler_method(self):
-        file_extension = os.path.splitext(self.file_handler.file_path)[-1].lower()
-        handler_method = getattr(self.file_handler, f"handle_{file_extension[1:]}", None)
-        if handler_method is None:
-            logging.error(f"Unsupported file extension '{file_extension}'.")
-        return handler_method, file_extension
-
-    def check_random_selection(self, lines, bytes, random_selection):
-        if random_selection and not lines and not bytes:
-            logging.error("Please specify the number of lines or bytes when using random selection.")
-            return False
-        return True
-
-    def transform(self, input=None, output=None, instruction=None, add=None, lines=None, bytes=None, append=False, random_selection=False):
+    def process(self, *args, **kwargs):
         try:
             # Validate the existence of the input file
             if not self.validate_input_file():
                 return
-
-            # Get the handler method based on file extension
-            handler_method, file_extension = self.get_handler_method()
-            if handler_method is None:
-                return
-
-            # Check if the user has specified lines or bytes for random selection
-            if not self.check_random_selection(lines, bytes, random_selection):
-                return
-
-            logging.info(f"Charging .{file_extension[1:]} file...")
             
+            # Create an instance of OutputSchemaHandler
+            output_schema_handler = OutputSchemaHandler(self.config.get('output_schema'))
+
             # Generate transformed data
-            transformed_data_generator = handler_method(
-                input=input, output=output, instruction=instruction, 
-                add=add, lines=lines, bytes=bytes, random_selection=random_selection
+            transformed_data_generator = self.file_handler.handle_file(
+                input=kwargs.get('input'), 
+                output=kwargs.get('output'), 
+                instruction=kwargs.get('instruction'), 
+                add=kwargs.get('add'), 
+                lines=kwargs.get('lines'), 
+                bytes=kwargs.get('bytes'), 
+                random_selection=kwargs.get('random_selection'),
             )
-            
+
             # Process and save the transformed data
-            self.process_and_save(transformed_data_generator, total_lines=lines, bytes=bytes, append=append)
+            self.process_and_save(transformed_data_generator, total_lines=kwargs.get('lines'), bytes=kwargs.get('bytes'), append=kwargs.get('append'))
+
         except FileNotFoundError:
             logging.error(f"The file '{self.file_handler.file_path}' does not exist.")
         except Exception as e:

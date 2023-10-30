@@ -10,7 +10,7 @@ profiles:
     output: null
     instruction: null
     additional_fields: []
-    lines: 1000
+    lines: 5
     bytes: null
     append: false
     random_selection: false
