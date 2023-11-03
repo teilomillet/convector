@@ -1,34 +1,47 @@
-from ..file_handlers import JSONLFileHandler, JSONFileHandler, CSVFileHandler, ParquetFileHandler, ZSTFileHandler  # Add other file handlers as needed
+from pathlib import Path
+
+from ..file_handlers import (
+    JSONLFileHandler, 
+    JSONFileHandler, 
+    CSVFileHandler, 
+    ParquetFileHandler, 
+    ZSTFileHandler,  
+    # Add other file handlers as needed
+)
+
 from convector.core.base_file_handler import BaseFileHandler
 
 class FileHandlerFactory:
+    # Registry mapping file extensions to their handlers
+    _handlers_registry = {
+        'json': JSONFileHandler,
+        'jsonl': JSONLFileHandler,
+        'csv': CSVFileHandler,
+        'parquet': ParquetFileHandler,
+        'zst': ZSTFileHandler
+        # Add new file types and their handlers here as needed
+    }
+
+    @staticmethod
+    def register_file_handler(file_extension: str, handler_class):
+        """
+        Class method to register a new file handler for a specific file extension.
+
+        Parameters:
+            file_extension (str): The file extension to register the handler for.
+            handler_class (BaseFileHandler): The handler class to associate with the file extension.
+        """
+        FileHandlerFactory._handlers_registry[file_extension] = handler_class
+
     @staticmethod
     def create_file_handler(file_path: str, is_conversation: bool) -> BaseFileHandler:
         """
         Factory method to instantiate the appropriate FileHandler based on file type and configurations.
-
-        Parameters:
-            file_path (str): The path to the file that needs to be processed.
-            is_conversation (bool): Flag indicating whether the data is in a conversational format.
-
-        Returns:
-            BaseFileHandler: An instance of the appropriate FileHandler.
         """
+        file_extension = Path(file_path).suffix[1:].lower()  # Using pathlib for extension extraction
 
-        # Extract file extension to determine which file handler to use
-        file_extension = file_path.split('.')[-1].lower()
-
-        if file_extension == 'json':
-            return JSONFileHandler(file_path, is_conversation)
-        elif file_extension == 'jsonl':
-            return JSONFileHandler(file_path, is_conversation)
-        elif file_extension == 'csv':
-            return CSVFileHandler(file_path, is_conversation)
-        elif file_extension == 'parquet':
-            return ParquetFileHandler(file_path, is_conversation)
-        elif file_extension == 'zst':
-            return ZSTFileHandler(file_path, is_conversation)
-        # Add more conditions here for additional file types
-
+        handler_class = FileHandlerFactory._handlers_registry.get(file_extension)
+        if handler_class:
+            return handler_class(file_path, is_conversation)
         else:
             raise ValueError(f"Unsupported file type: {file_extension}")

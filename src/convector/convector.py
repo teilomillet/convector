@@ -261,11 +261,17 @@ class Convector:
     # Determine the output file path based on the provided or default configurations.
     def get_output_file_path(self):
         if self.output_file:
-            return Path(self.output_dir) / self.output_file
+            output_file_path = Path(self.output_dir) / self.output_file
         else:
             input_path = Path(self.file_handler.file_path)
             output_base_name = input_path.stem + '_tr.jsonl'
-            return Path(self.output_dir) / output_base_name
+            output_file_path = Path(self.output_dir) / output_base_name
+
+        # Log the output path
+        absolute_path = output_file_path.resolve()
+        logging.info(f"Output will be saved to: {absolute_path}")
+        print(f"Output will be saved to: {absolute_path}")  # This will print to console
+        return output_file_path
 
     def write_to_file(self, file, item, lines_written, total_bytes_written, total_lines, bytes, output_schema_handler):
         """
@@ -307,49 +313,48 @@ class Convector:
         """
         Process the transformed data and save it to the output file.
         """
-
-        lines_written, total_bytes_written = 0, 0
-
         try:
             progress_bar = None
             output_file_path = self.get_output_file_path()
             lines_written, total_bytes_written = 0, 0
             
-            try:
-                os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
-                mode = 'a' if os.path.exists(output_file_path) and append else 'w'
-                with open(output_file_path, mode, encoding='utf-8') as file:
-                    total = bytes or total_lines or 0  # Ensure total is never None
-                    unit = " bytes" if bytes else " lines"
-                    progress_bar = tqdm(total=total, unit=unit, position=0, desc="Processing", leave=True)
-                    
-                    for items in transformed_data_generator:
-                        if isinstance(items, dict):  # if items is a single dictionary
-                            items = [items]
-                        for item in items:
-                            lines_written, total_bytes_written, done = self.write_to_file(
-                                file, item, lines_written, total_bytes_written, total_lines, bytes, self.output_schema_handler
-                            )
-                            progress_bar.update(1)
-                            if done:
-                                return
-                    
-                    progress_bar.close()
-                    
-            except Exception as e:
-                    print(f"An error occurred while processing and saving the file: {e}")
-            finally:
-                if progress_bar:
-                    progress_bar.close()
-                self.display_results(output_file_path, lines_written, total_bytes_written)
+            # Ensure the output directory exists before opening the file
+            output_file_path.parent.mkdir(parents=True, exist_ok=True)
+
+            mode = 'a' if output_file_path.exists() and append else 'w'
+            with open(output_file_path, mode, encoding='utf-8') as file:
+                total = bytes or total_lines or 0  # Ensure total is never None
+                unit = " bytes" if bytes else " lines"
+                progress_bar = tqdm(total=total, unit=unit, position=0, desc="Processing", leave=True)
+                
+                for items in transformed_data_generator:
+                    if isinstance(items, dict):  # if items is a single dictionary
+                        items = [items]
+                    for item in items:
+                        lines_written, total_bytes_written, done = self.write_to_file(
+                            file, item, lines_written, total_bytes_written, total_lines, bytes, self.output_schema_handler
+                        )
+                        progress_bar.update(1)
+                        if done:
+                            break
+                
+                progress_bar.close()
+                
+            # Display the results after processing is complete
+            self.display_results(output_file_path, lines_written, total_bytes_written)
+            
         except FileNotFoundError:
             logging.error("Error: Output directory does not exist and could not be created.")
         except IOError as e:
             logging.error(f"IO Error: {e}")
         except Exception as e:
             logging.error(f"An unexpected error occurred while processing and saving the file: {e}")
+        finally:
+            if progress_bar:
+                progress_bar.close()
 
     def display_results(self, output_file_path, lines_written, total_bytes_written):
+        print("Displaying results...")  # Debugging print
         absolute_path = Path(output_file_path).resolve()
         print(f"\nDelivered to file://{absolute_path} \n({lines_written} lines, {total_bytes_written} bytes)")
 
@@ -365,6 +370,11 @@ class Convector:
             if not self.validate_input_file():
                 return
             
+            print("Starting processing...")  # Debugging print
+            
+            output_file_path = self.get_output_file_path()
+            output_file_path.parent.mkdir(parents=True, exist_ok=True)
+            
             # Create an instance of OutputSchemaHandler
             output_schema_handler = OutputSchemaHandler(self.config.get('output_schema'))
 
@@ -379,8 +389,12 @@ class Convector:
                 random_selection=kwargs.get('random_selection'),
             )
 
+            print("Data generation complete...")  # Debugging print
+
             # Process and save the transformed data
             self.process_and_save(transformed_data_generator, total_lines=kwargs.get('lines'), bytes=kwargs.get('bytes'), append=kwargs.get('append'))
+
+            print("Data processing and saving complete...")  # Debugging print
 
         except FileNotFoundError:
             logging.error(f"The file '{self.file_handler.file_path}' does not exist.")

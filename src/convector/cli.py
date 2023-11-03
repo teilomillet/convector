@@ -1,12 +1,18 @@
 import click
 import os
 import yaml
+import logging
+from pathlib import Path
 
 # Importing necessary classes and functions
 from .core.base_file_handler import BaseFileHandler
 from .core.file_handler_factory import FileHandlerFactory
+from .core.directory_processor import DirectoryProcessor
 from .convector import Convector, config_manager, ConfigLoader, UserInteraction
 
+
+# Set up logging configuration
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 CONFIG_FILE = 'setup.yaml'
 
@@ -25,6 +31,51 @@ def validate_config(final_config):
     for key in required_keys:
         if key not in final_config:
             raise ValueError(f"Missing required configuration: {key}")
+        
+
+def create_convector_instance(final_config, file_path):
+    return Convector(
+        final_config,
+        UserInteraction(),
+        str(file_path),
+        final_config.get('conversation'),
+        final_config.get('output_file'),
+        final_config.get('output_dir'),
+        final_config.get('output_schema'),
+    )
+
+def create_directory_processor_instance(final_config, file_path):
+    # Create a copy of the final_config to manipulate
+    config_kwargs = final_config.copy()
+
+    # Remove keys that are already explicitly passed to the constructor
+    for key in ['output_dir', 'output_file', 'output_schema']:
+        config_kwargs.pop(key, None)  # Remove the key if it exists, do nothing otherwise
+
+    # Now pass the remaining configuration as keyword arguments
+    return DirectoryProcessor(
+        directory_path=str(file_path),
+        config=final_config,
+        is_conversation=final_config.get('conversation'),
+        output_file=final_config.get('output_file'),
+        output_dir=final_config.get('output_dir'),
+        output_schema=final_config.get('output_schema'),
+        **config_kwargs  # Pass all remaining configuration parameters as keyword arguments
+    )
+def process_conversational_data(file_path, final_config):
+    file_path = Path(file_path)
+    if file_path.is_dir():
+        logging.info("Directory processing mode selected.")
+        directory_processor = create_directory_processor_instance(final_config, file_path)
+        directory_processor.process_directory()
+        directory_processor.print_summary()
+    elif file_path.is_file():
+        logging.info(f"Processing file: {file_path}")
+        convector = create_convector_instance(final_config, file_path)
+        convector.process()
+    else:
+        logging.error("The path provided is neither a file nor a directory.")
+        raise ValueError("Invalid path provided")
         
 @convector.command()
 @click.argument('file_path', type=click.Path(exists=True))
@@ -79,33 +130,18 @@ def process(file_path, conversation, input, output, instruction, add, lines, byt
         print(f"Configuration Error: {e}")
         exit(1)
 
-    # Create an instance of the Convector class with the final configuration
-    convector = Convector(
-        final_config, 
-        UserInteraction(), 
-        final_config['file_path'],  # This should be a string
-        final_config.get('conversation'),  # Pass this as needed
-        final_config.get('output_file'),  # Use get() for optional keys
-        final_config.get('output_dir'),    # Use get() for optional keys
-        final_config.get('output_schema'),
-    )
+     # Enable verbose logging if needed
+    if verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
 
+    # Process the conversational data
+    try:
+        process_conversational_data(file_path, final_config)
+    except ValueError as e:
+        logging.error(f"Error during processing: {e}")
+        exit(1)
 
-    # Call the process method from the Convector class
-    convector.process(
-        input=final_config.get('input'),
-        output=final_config.get('output'),
-        instruction=final_config.get('instruction'),
-        add=final_config.get('add'),
-        lines=final_config.get('lines'),
-        bytes=final_config.get('bytes'),
-        append=final_config.get('append'),
-        random_selection=final_config.get('random'),
-        output_schema=final_config.get('output_schema'),
-    )
-
-
-
+    logging.info("Processing completed.")
 
 @convector.group()
 def config():
