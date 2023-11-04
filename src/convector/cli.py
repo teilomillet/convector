@@ -165,21 +165,21 @@ class ConfigKeys(Enum):
         
 # The process command is the core of the CLI, allowing users to process conversational data files.
 @convector.command()
-@click.argument('file_path', type=click.Path(exists=True))
-@click.option('--profile', default=None, help='Profile to use from the YAML config file.')
-@click.option('--is_conversation', is_flag=True, help='Specify if the data is in a conversational format.')
-@click.option('--input', help='Key for user inputs in the data.')
-@click.option('--output', help='Key for bot outputs in the data.')
+@click.argument('file_path', type=click.Path(exists=True), metavar='<file_path>')
+@click.option('-p', '--profile', default='default', help='Use a predefined profile from the config.')
+@click.option('-c', '--conversation', 'is_conversation', is_flag=True, help='Treat the data as conversational exchanges.')
 @click.option('--instruction', help='Key for instructions or system messages in the data.')
-@click.option('--add', help='Comma-separated column names to keep in the transformed data.')
-@click.option('--lines', type=int, help='Number of lines to process from the file.')
-@click.option('--bytes', type=int, help='Number of bytes to process from the file.')
-@click.option('--output_file', type=click.Path(), help='Path to the output file where transformed data will be saved.')
-@click.option('--output_dir', type=click.Path(), help='Specify a custom directory where the output file will be saved.')
-@click.option('--append', is_flag=True, help='Specify whether to append to or overwrite an existing file.')
-@click.option('--verbose', is_flag=True, help='Enable verbose mode for detailed logs.')
-@click.option('--random', is_flag=True, help='Randomly select lines from the file.')
-@click.option('--output_schema', default=None, help='Output schema to use for the transformed data.')
+@click.option('-i', '--input-key', 'input', help='Key for user inputs.')
+@click.option('-o', '--output-key', 'output', help='Key for bot responses.')
+@click.option('-s', '--schema', 'output_schema', default=None, help='Schema for output data.')
+@click.option('-a', '--add-cols', 'add', help='Columns to include in the output, separated by commas.')
+@click.option('-l', '--limit', 'lines', type=int, help='Limit processing to this number of lines.')
+@click.option('--bytes', type=int, help='Limit processing to this number of bytes.')
+@click.option('-f', '--file-out', 'output_file', type=click.Path(), help='File to write the transformed data to.')
+@click.option('-d', '--dir-out', 'output_dir', type=click.Path(), help='Directory for output files.')
+@click.option('--append', is_flag=True, help='Add to an existing file instead of overwriting.')
+@click.option('-v', '--verbose', is_flag=True, help='Print detailed logs of the process.')
+@click.option('--random', is_flag=True, help='Randomly select data to process.')
 def process(file_path: str, 
             is_conversation: bool, 
             input: Optional[str], 
@@ -216,7 +216,9 @@ def process(file_path: str,
     output_schema (str): Output schema to use for the transformed data.
     
     Example:
-        convector process /path/to/data --conversation --input user --output bot
+        convector process <file_path> -c -i message -o response
+        convector process <file_path> --profile conversation -l 100 -f output.json
+
     """
     try:
         # Set logging level based on verbose
