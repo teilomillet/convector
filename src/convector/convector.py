@@ -29,7 +29,7 @@ DEFAULT_CONFIG = {
     'profiles': {
         'default': {
             'output_dir': 'silo',
-            'conversation': False,
+            'is_conversation': False,
             'input': None,
             'output': None,
             'instruction': None,
@@ -42,7 +42,7 @@ DEFAULT_CONFIG = {
         },
         'Conversation': {
             'output_dir': 'silo',
-            'conversation': True,
+            'is_conversation': True,
             'input': None,
             'output': None,
             'instruction': None,
@@ -234,7 +234,7 @@ class Convector:
     """
     Convector is the main class handling the transformation process of conversational data.
     """
-    def __init__(self, config, user_interaction, file_path, conversation, output_schema, output_file=None, output_dir=None):
+    def __init__(self, config, user_interaction, file_path, is_conversation, output_schema, output_file=None, output_dir=None):
         """Initialization of the Convector object with necessary handlers and configurations."""
         self.config = config  # Final merged configuration
         self.user_interaction = user_interaction
@@ -248,7 +248,7 @@ class Convector:
         
 
         # Initialize the FileHandler using the FileHandlerFactory
-        self.file_handler = FileHandlerFactory.create_file_handler(file_path, conversation)
+        self.file_handler = FileHandlerFactory.create_file_handler(file_path, is_conversation)
         
         # Retrieve or prompt for CONVECTOR_ROOT_DIR
         self.convector_root_dir = config_manager.prompt_for_convector_root_dir()

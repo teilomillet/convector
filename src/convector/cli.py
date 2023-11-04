@@ -77,7 +77,7 @@ class ConvectorFactory:
             final_config,
             UserInteraction(),
             str(file_path),
-            final_config.get('conversation'),
+            final_config.get('is_conversation'),
             final_config.get('output_file'),
             final_config.get('output_dir'),
             final_config.get('output_schema'),
@@ -148,7 +148,7 @@ def convector():
 # Define the Enum for Configuration Keys
 class ConfigKeys(Enum):
     FILE_PATH = 'file_path'
-    CONVERSATION = 'conversation'
+    CONVERSATION = 'is_conversation'
     INPUT = 'input'
     OUTPUT = 'output'
     INSTRUCTION = 'instruction'
@@ -167,7 +167,7 @@ class ConfigKeys(Enum):
 @convector.command()
 @click.argument('file_path', type=click.Path(exists=True))
 @click.option('--profile', default=None, help='Profile to use from the YAML config file.')
-@click.option('--conversation', is_flag=True, help='Specify if the data is in a conversational format.')
+@click.option('--is_conversation', is_flag=True, help='Specify if the data is in a conversational format.')
 @click.option('--input', help='Key for user inputs in the data.')
 @click.option('--output', help='Key for bot outputs in the data.')
 @click.option('--instruction', help='Key for instructions or system messages in the data.')
@@ -181,7 +181,7 @@ class ConfigKeys(Enum):
 @click.option('--random', is_flag=True, help='Randomly select lines from the file.')
 @click.option('--output_schema', default=None, help='Output schema to use for the transformed data.')
 def process(file_path: str, 
-            conversation: bool, 
+            is_conversation: bool, 
             input: Optional[str], 
             output: Optional[str], 
             instruction: Optional[str], 
@@ -225,7 +225,7 @@ def process(file_path: str,
         # Define the CLI arguments in a dictionary
         cli_args = {
             ConfigKeys.FILE_PATH: file_path,
-            ConfigKeys.CONVERSATION: conversation,
+            ConfigKeys.CONVERSATION: is_conversation,
             ConfigKeys.INPUT: input,
             ConfigKeys.OUTPUT: output,
             ConfigKeys.INSTRUCTION: instruction,

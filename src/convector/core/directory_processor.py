@@ -42,7 +42,7 @@ class DirectoryProcessor:
                                 config=self.config,  # The configuration dictionary
                                 user_interaction=UserInteraction(),  # Instance for user interaction
                                 file_path=str(file_path),  # Current file path
-                                conversation=self.is_conversation,  # Conversation flag
+                                is_conversation=self.is_conversation,  # Conversation flag
                                 output_schema=self.output_schema,  # Output schema
                                 output_file=self.output_file,
                                 output_dir=self.output_dir
