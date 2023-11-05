@@ -1,0 +1,41 @@
+version: 1.0
+profiles:
+  default:
+    output_dir: silo
+    is_conversation: false
+    input_key: null
+    output_key: null
+    instruction: null
+    additional_fields: null
+    lines: 1000
+    bytes: null
+    append: false
+    verbose: false
+    random_selection: false
+    output_schema: default
+  conversation:
+    output_dir: silo_conversation
+    is_conversation: true
+    input_key: user_input
+    output_key: bot_response
+    instruction: system_message
+    additional_fields: "timestamp,user_id"
+    lines: null
+    bytes: null
+    append: false
+    verbose: false
+    random_selection: true
+    output_schema: conversation
+  large_dataset:
+    output_dir: silo_large
+    is_conversation: false
+    input_key: input
+    output_key: output
+    instruction: note
+    additional_fields: "source,context"
+    lines: null
+    bytes: 10485760  # Limit processing to 10MB
+    append: true
+    verbose: true
+    random_selection: false
+    output_schema: extended

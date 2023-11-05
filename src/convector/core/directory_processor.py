@@ -3,7 +3,8 @@ import logging
 from pathlib import Path
 from tqdm import tqdm
 from .file_handler_factory import FileHandlerFactory
-from ..convector import Convector, config_manager, ConfigLoader, UserInteraction
+from ..convector import Convector, UserInteraction
+from .user_interaction import UserInteraction
 
 # Configuration for retries
 RETRY_ATTEMPTS = 3

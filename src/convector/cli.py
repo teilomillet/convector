@@ -2,19 +2,21 @@ import click
 import yaml
 import logging
 import shutil
+import json
+import logging.config
+from pydantic import BaseModel, Field
 from pathlib import Path
-from enum import Enum, auto
-from typing import List, Dict, Any, Optional, Union, NoReturn
+from typing import Any, Optional, Union
 from tempfile import NamedTemporaryFile
-from logging.handlers import RotatingFileHandler
+
 
 # Importing necessary classes and functions
-from .core.base_file_handler import BaseFileHandler
-from .core.file_handler_factory import FileHandlerFactory
 from .core.directory_processor import DirectoryProcessor
-from .convector import Convector, config_manager, ConfigLoader, UserInteraction
+from .core.config import ConvectorConfig
+from .core.user_interaction import UserInteraction
+from .convector import Convector
+from .core.file_handler_factory import FileHandlerFactory
 
-CONFIG_FILE = 'setup.yaml'
 
 # Custom exceptions are defined here to provide more meaningful error messages and 
 # to facilitate the capture and handling of specific error conditions within the application.
@@ -26,62 +28,48 @@ class ProcessingError(Exception):
     """Exception raised during processing of the conversational data."""
     pass
 
+def setup_logging(default_path: str = None, default_level=logging.INFO):
+    """Setup logging configuration from a YAML file."""
+    # If no default path is provided, use the ConvectorConfig to determine the default path.
+    if default_path is None:
+        # Use the existing ConvectorConfig to determine the root directory
+        config = ConvectorConfig()
+        default_path = Path(config.convector_root_dir) / 'config.yaml'
+    
+    try:
+        # Open the YAML configuration file
+        with open(default_path, 'rt') as file:
+            config = yaml.safe_load(file)
+            logging.config.dictConfig(config)
+    except FileNotFoundError:
+        # If the file is not found, fall back to the default logging configuration
+        logging.warning(f"Logging configuration file is not found at '{default_path}'. Using default configs.")
+        logging.basicConfig(level=default_level)
 
-# The dedicated logger is set up here. This allows the application to have a more 
-# flexible and controlled logging system, separate from the root logger.
-logger = logging.getLogger('convector')
-logger.setLevel(logging.INFO)  # Default level can be INFO
-
-# Console handler for the logger to output logs to the console.
-# This is where the format of the log messages is defined.
-console_handler = logging.StreamHandler()
-console_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-logger.addHandler(console_handler)
-
-# This function is used to dynamically set the logging level. If verbose output is
-# requested by the user (via a CLI flag), the logging level is set to DEBUG; otherwise, it remains INFO.
-def set_logging_level(verbose: bool) -> None:
-    """
-    Set the logging level to DEBUG if verbose is True, otherwise leave it as the default.
-
-    Args:
-        verbose (bool): If true, set logging to DEBUG, otherwise INFO.
-    """
-    if verbose:
-        logger.setLevel(logging.DEBUG)
-    else:
-        logger.setLevel(logging.INFO)
-
-# The ConfigValidator class is designed to ensure that the provided configuration
-# contains all the necessary keys. It raises a ConfigurationError if any are missing.
-class ConfigValidator:
-    # Constructor
-    def __init__(self, required_keys: Optional[List[str]] = None) -> None:
-        if required_keys is None:
-            # Default required keys using the Enum
-            required_keys = [ConfigKeys.FILE_PATH.value, ConfigKeys.CONVERSATION.value]
-        self.required_keys = required_keys
-
-    def validate(self, config: Dict[str, Any]) -> None:
-        missing_keys = [key for key in self.required_keys if key not in config]
-        if missing_keys:
-            raise ConfigurationError(f"Missing required configuration keys: {', '.join(missing_keys)}")
 
 # Factory classes like ConvectorFactory and DirectoryProcessorFactory encapsulate the 
 # creation logic of Convector and DirectoryProcessor objects, respectively. This follows 
 # the Factory design pattern, making the instantiation process more adaptable to changes.
 class ConvectorFactory:
     @staticmethod
-    def create_from_config(final_config, file_path):
-        return Convector(
-            final_config,
-            UserInteraction(),
-            str(file_path),
-            final_config.get('is_conversation'),
-            final_config.get('output_file'),
-            final_config.get('output_dir'),
-            final_config.get('output_schema'),
-        )
+    def create_from_config(config, file_path):
+        # Assuming `is_conversation` is intended to be a flag that indicates
+        # whether the file contains conversational data or not.
+        # If 'is_conversation' is an expected command-line argument,
+        # ensure that it's being set in the config object somewhere after parsing CLI args.
+
+        # Check if 'is_conversation' is part of the configuration
+        is_conversation = getattr(config, 'is_conversation', False)
+
+        # Pass 'is_conversation' explicitly
+        convector = Convector(config=config, file_path=file_path, is_conversation=is_conversation, user_interaction=UserInteraction())
+
+        # The FileHandlerFactory.create_file_handler call should be within the Convector class
+        # if it relies on the config being passed to the Convector constructor.
+        # Otherwise, pass 'is_conversation' directly to the FileHandlerFactory here
+        # and then to the Convector object.
+
+        return convector
 
 class DirectoryProcessorFactory:
     @staticmethod
@@ -93,37 +81,24 @@ class DirectoryProcessorFactory:
             **config_kwargs
         )
 
-# The safe_update_yaml function is responsible for safely updating the YAML configuration file.
-# It uses a temporary file to avoid data loss in case the update process is interrupted.
-def safe_update_yaml(file_path: Union[str, Path], key: str, value: Any) -> None:
-    with NamedTemporaryFile('w', delete=False) as temp_file:
-        with open(file_path, 'r') as config_file:
-            config = yaml.safe_load(config_file) or {}
-            config[key] = value
-            yaml.safe_dump(config, temp_file)
-    shutil.move(temp_file.name, file_path)
-
 # The echo_info and echo_error functions are wrappers around click's echo function, providing
 # a consistent style for information and error messages throughout the CLI.
 def echo_info(message: str) -> None:
     click.echo(click.style(message, fg='green'))
 
-def echo_error(message: str) -> NoReturn:
-    click.echo(click.style(f"Error: {message}", fg='red', bold=True))
-
 # The main data processing function orchestrates the processing of conversational data.
 # It uses the provided file path and configuration to determine the mode of processing (file or directory)
 # and to initialize the appropriate processing class (Convector or DirectoryProcessor).
-def process_conversational_data(file_path: Union[str, Path], final_config: Dict[str, Any]) -> None:
+def process_conversational_data(file_path: Union[str, Path], config: ConvectorConfig) -> None:
     file_path = Path(file_path)
     if file_path.is_dir():
         echo_info("Directory processing mode selected.")
-        directory_processor = DirectoryProcessorFactory.create_from_config(final_config, file_path)
+        directory_processor = DirectoryProcessorFactory.create_from_config(config, file_path)
         directory_processor.process_directory()
         directory_processor.print_summary()
     elif file_path.is_file():
-        echo_info(f"Processing file: {file_path}")
-        convector = ConvectorFactory.create_from_config(final_config, file_path)
+        UserInteraction.show_message(f"Processing file: {file_path}")
+        convector = ConvectorFactory.create_from_config(config, file_path)
         convector.process()
     else:
         raise ProcessingError("The path provided is neither a file nor a directory.")
@@ -143,28 +118,24 @@ def convector():
 
     For more detailed information and examples, use --verbose.
     """
-    pass
+    # Initialize logging at the start
+    setup_logging()  # Initialize logging
+    
+    try:
+        ctx = click.get_current_context()
+        ctx.obj = UserInteraction.setup_environment()
+        config_path = ctx.obj.get_config_file_path()
+        if not Path(config_path).exists():
+            # If the config file doesn't exist, create the default one
+            ConvectorConfig.create_default_config(Path(config_path))
+    except Exception as e:
+        click.echo(f"An error occurred during setup: {e}")
+        exit(1)
 
-# Define the Enum for Configuration Keys
-class ConfigKeys(Enum):
-    FILE_PATH = 'file_path'
-    CONVERSATION = 'is_conversation'
-    INPUT = 'input'
-    OUTPUT = 'output'
-    INSTRUCTION = 'instruction'
-    ADD = 'add'
-    LINES = 'lines'
-    BYTES = 'bytes'
-    OUTPUT_FILE = 'output_file'
-    OUTPUT_DIR = 'output_dir'
-    APPEND = 'append'
-    VERBOSE = 'verbose'
-    RANDOM = 'random'
-    PROFILE = 'profile'
-    OUTPUT_SCHEMA = 'output_schema'
         
 # The process command is the core of the CLI, allowing users to process conversational data files.
 @convector.command()
+@click.pass_context  # This decorator allows us to pass the Click context into the command function
 @click.argument('file_path', type=click.Path(exists=True), metavar='<file_path>')
 @click.option('-p', '--profile', default='default', help='Use a predefined profile from the config.')
 @click.option('-c', '--conversation', 'is_conversation', is_flag=True, help='Treat the data as conversational exchanges.')
@@ -180,7 +151,7 @@ class ConfigKeys(Enum):
 @click.option('--append', is_flag=True, help='Add to an existing file instead of overwriting.')
 @click.option('-v', '--verbose', is_flag=True, help='Print detailed logs of the process.')
 @click.option('--random', is_flag=True, help='Randomly select data to process.')
-def process(file_path: str, 
+def process(ctx, file_path: str, 
             is_conversation: bool, 
             input: Optional[str], 
             output: Optional[str], 
@@ -220,56 +191,47 @@ def process(file_path: str,
         convector process <file_path> --profile conversation -l 100 -f output.json
 
     """
+    # Retrieve the config object from the context
+    config = ctx.obj
     try:
-        # Set logging level based on verbose
-        set_logging_level(verbose)
+        # Update config with CLI arguments if provided
+        config.update_from_cli(
+            profile,
+            file_path=file_path,
+            is_conversation=is_conversation,
+            input=input,
+            output=output,
+            instruction=instruction,
+            add=add.split(',') if add else None,  # Convert comma-separated string to list
+            lines=lines,
+            bytes=bytes,
+            output_file=output_file,
+            output_dir=output_dir,
+            append=append,
+            verbose=verbose,
+            random=random,
+            output_schema=output_schema,
+        )
 
-        # Define the CLI arguments in a dictionary
-        cli_args = {
-            ConfigKeys.FILE_PATH: file_path,
-            ConfigKeys.CONVERSATION: is_conversation,
-            ConfigKeys.INPUT: input,
-            ConfigKeys.OUTPUT: output,
-            ConfigKeys.INSTRUCTION: instruction,
-            ConfigKeys.ADD: add,
-            ConfigKeys.LINES: lines,
-            ConfigKeys.BYTES: bytes,
-            ConfigKeys.OUTPUT_FILE: output_file,
-            ConfigKeys.OUTPUT_DIR: output_dir,
-            ConfigKeys.APPEND: append,
-            ConfigKeys.VERBOSE: verbose,
-            ConfigKeys.RANDOM: random,
-            ConfigKeys.PROFILE: profile,
-            ConfigKeys.OUTPUT_SCHEMA: output_schema,
-        }
-
-        # Convert Enum keys to strings for compatibility with other parts of the code
-        config_dict = {key.value: value for key, value in cli_args.items()}
-
-        # Create an instance of ConfigLoader with the config_dict
-        config_loader = ConfigLoader(config_manager, config_dict)
-        final_config = config_loader.final_config
-
-        # Validate the final configuration
-        validator = ConfigValidator()
-        validator.validate(final_config)
+        # Display messages using UserInteraction
+        UserInteraction.show_message("Processing started.", "info")
 
         # Process the conversational data with the final configuration
-        process_conversational_data(file_path, final_config)
+        process_conversational_data(Path(file_path), config)
 
     except ConfigurationError as e:
         # Handle specific errors (e.g., validation errors)
-        echo_error(f"Configuration Error: {e}")
+        UserInteraction.show_message(f"Configuration Error: {e}", "error")
         exit(1)
 
     except ProcessingError as e:
         # Handle any other unexpected errors
-        echo_error(f"Unexpected Error: {e}")
+        UserInteraction.show_message(f"Configuration Error: {e}", "error")
         exit(1)
 
     else:
         # This block runs if no exceptions were raised
-        echo_info("Processing completed.")
+        UserInteraction.show_message("Processing completed.", "info")
 
 # Configuration management commands allow users to get and set configuration values.
 @convector.group()
@@ -280,17 +242,20 @@ def config():
     pass
 
 @config.command()
+@click.pass_context
 @click.argument('key')
 @click.argument('value')
-def set(key, value):
+def set(ctx, key, value):
     """
     Set a configuration KEY with a specified VALUE.
     """
     try:
-        safe_update_yaml(CONFIG_FILE, key, value)
+        # Use the ConvectorConfig's method to update and save the configuration
+        config = ctx.obj
+        config.set_and_save(key, value)
         echo_info(f"Configuration updated: {key} = {value}")
     except Exception as e:
-        echo_error(f"An error occurred while updating the configuration: {e}")
+        click.error(f"An error occurred while updating the configuration: {e}")
 
 @config.command()
 @click.argument('key')
@@ -308,4 +273,5 @@ def get(key):
 
 # The entry point check ensures that the script is being run directly and not imported as a module.
 if __name__ == "__main__":
+    setup_logging()  # Initialize logging
     convector()

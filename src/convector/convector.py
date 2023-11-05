@@ -1,231 +1,26 @@
-import argparse
 import json
 import os
-import yaml
 import logging
-import random
-import traceback
-import urllib.parse
 from tqdm import tqdm
 from pathlib import Path
 
-from convector.core.base_file_handler import BaseFileHandler
 from convector.core.file_handler_factory import FileHandlerFactory
-from convector.data_processors.data_processors import IDataProcessor, ConversationDataProcessor, CustomKeysDataProcessor, AutoDetectDataProcessor
 from convector.utils.output_schema_handler import OutputSchemaHandler
-from convector.utils.random_selector import IRandomSelector, LineRandomSelector, ByteRandomSelector, ConversationRandomSelector
+from convector.core.user_interaction import UserInteraction
+from convector.core.config import ConvectorConfig
 
-
-# Config file
-CONFIG_FILE = 'setup.yaml'
-
-# Default Config
-DEFAULT_CONFIG = {
-    'version': 1.0,
-    'settings': {
-        'CONVECTOR_ROOT_DIR': str(Path.home() / 'convector'),
-        'default_profile': 'default',
-    },
-    'profiles': {
-        'default': {
-            'output_dir': 'silo',
-            'is_conversation': False,
-            'input': None,
-            'output': None,
-            'instruction': None,
-            'additional_fields': [],
-            'lines': 1000,
-            'bytes': None,
-            'append': False,
-            'random_selection': False,
-            'output_schema': 'default',
-        },
-        'Conversation': {
-            'output_dir': 'silo',
-            'is_conversation': True,
-            'input': None,
-            'output': None,
-            'instruction': None,
-            'additional_fields': [],
-            'lines': None,
-            'bytes': None,
-            'append': False,
-            'random_selection': False,
-            'output_schema': 'default',
-        },
-    }
-}
-
-def check_or_create_config():
-    if not os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, 'w') as file:
-            yaml.safe_dump(DEFAULT_CONFIG, file)
-        print(f"Created default configuration file at {CONFIG_FILE}")
-
-# Call this function at the beginning of your program
-check_or_create_config()
-
-# Configuration Class
-class Configuration:
-    def __init__(self, config_file='setup.yaml'):
-        self.config_file = config_file
-        self.config_data = self.load_or_create_config()
-        
-    def load_or_create_config(self):
-        try:
-            with open(self.config_file, 'r') as file:
-                config = yaml.safe_load(file)
-                if 'data_processor' not in config:
-                    config['data_processor'] = 'AutoDetect'  # Default value
-                return config
-        except FileNotFoundError:
-            print(f"Creating default configuration file at {self.config_file}")
-            self.save_config(DEFAULT_CONFIG)
-            return DEFAULT_CONFIG
-        except Exception as e:
-            print(f"An error occurred while reading the configuration file: {e}")
-            return {}
-
-    def save_config(self, config_data):
-        with open(self.config_file, 'w') as file:
-            yaml.safe_dump(config_data, file)
-
-    def prompt_for_convector_root_dir(self):
-        # Load existing config data
-        config_data = self.load_or_create_config()
-        
-        # Check if CONVECTOR_ROOT_DIR is already set
-        convector_root_dir = config_data.get('settings', {}).get('CONVECTOR_ROOT_DIR', None)
-        
-        # If not set, prompt the user and update the YAML
-        if convector_root_dir is None:
-            convector_root_dir = UserInteraction.prompt_for_convector_root_dir()
-            
-            # Update YAML settings
-            if 'settings' not in config_data:
-                config_data['settings'] = {}
-            config_data['settings']['CONVECTOR_ROOT_DIR'] = convector_root_dir
-            self.save_config(config_data)
-            
-        return convector_root_dir
-    
-# Initialize Configuration
-config_manager = Configuration()
-
-# ConfigLoader Class
-class ConfigLoader:
-    def __init__(self, config_manager, cli_args):
-        self.config_manager = config_manager
-        self.yaml_config = self.config_manager.config_data
-        self.cli_args = cli_args
-        self.final_config = self.merge_configs()
-
-    def merge_configs(self):
-        default_profile_name = self.yaml_config.get('settings', {}).get('default_profile', 'default')
-        final_config = self.yaml_config.get('profiles', {}).get(default_profile_name, {}).copy()
-        
-        profile_name = self.cli_args.get('profile')
-        if profile_name:
-            profile_config = self.yaml_config.get('profiles', {}).get(profile_name)
-            if profile_config:
-                final_config.update(profile_config)
-            else:
-                logging.warning(f"Profile {profile_name} not found in YAML.")
-        
-        # Adding the new key 'data_processor' from YAML if it exists
-        data_processor = self.yaml_config.get('data_processor')
-        if data_processor:
-            final_config['data_processor'] = data_processor
-
-        final_config.update({k: v for k, v in self.cli_args.items() if v is not None})
-        return final_config
-
-class UserInteraction:
-    """
-    UserInteraction handles interactions with the user, such as receiving inputs.
-    """
-    @staticmethod
-    def load_existing_config():
-        """Load existing configuration from YAML file."""
-        try:
-            with open(CONFIG_FILE, 'r') as file:
-                config = yaml.safe_load(file)
-            return config.get('CONVECTOR_ROOT_DIR', None)
-        except FileNotFoundError:
-            return None
-
-    @staticmethod
-    def display_warning():
-        """Display a warning message about CONVECTOR_ROOT_DIR not being set."""
-        print("Warning: CONVECTOR_ROOT_DIR is not set.")
-        print("You can set it by running: export CONVECTOR_ROOT_DIR=/path/to/your/convector/repository")
-
-    @staticmethod
-    def display_ascii_art():
-        """Display ASCII art."""
-        # ASCII Art
-        print("                           ___====-_  _-====___")
-        print("                     _--^^^#####//      \#####^^^--_")
-        print("                  _-^##########// (    ) \##########^-_")
-        print("                 -############//  |\^^/|  \############-")
-        print("               _/############//   (@::@)   \############\_")
-        print("              /#############((     \//\    ))#############\  ")
-        print("             -###############\\    (oo) \   //###############-")
-        print("            -#################\\  / UUU  \ //#################-")
-        print("           -###################\\/  (v)   \/###################-")
-        print("          _#/|##########/\######(   /  \   )######/\##########|\#_")
-        print("          |/ |#/\#/\#/\/  \#/\#/\  (/|||\) /\#/\#/  \/\#/\#/\|  \|")
-        print("          `  |/  V  V  `   V  V /  ||(_)|| \ V  V    ' V  V  '")
-        print("                              (ooo / / \ \ ooo)")
-        print("                           `~  CONVECTOR  ~'")
-            
-    @staticmethod
-    def prompt_for_convector_root_dir():
-        """
-        Prompt the user to set the CONVECTOR_ROOT_DIR.
-        :return: The path to the CONVECTOR_ROOT_DIR.
-        """
-        convector_root_dir = UserInteraction.load_existing_config() or os.environ.get('CONVECTOR_ROOT_DIR')
-        
-        if not convector_root_dir:
-            UserInteraction.display_warning()
-            UserInteraction.display_ascii_art()
-            
-            # Define the default directory
-            default_dir = os.path.join(os.path.expanduser('~'), 'convector')
-            print(f"\nIf you continue, CONVECTOR_ROOT_DIR will be set to the default path: {default_dir}")
-            
-            # Ask for user confirmation
-            user_input = input("Do you want to continue with this directory? (y/n): ").strip().lower()
-            
-            if user_input == 'y':
-                convector_root_dir = default_dir
-                print(f"Continuing with CONVECTOR_ROOT_DIR set to {convector_root_dir}")
-                
-                # Save the configuration to a YAML file
-                config = {'CONVECTOR_ROOT_DIR': convector_root_dir}
-                with open(CONFIG_FILE, 'w') as file:
-                    yaml.safe_dump(config, file)
-            else:
-                print("Operation aborted.")
-                exit()
-        
-        return convector_root_dir
-    
-    @staticmethod
-    def prompt_for_data_processor():
-        """
-        Prompt the user to select a data processor if it's not set in the configuration.
-        """
-        print("Data Processor is not set.")
-        print("Available Options: AutoDetect, CustomKeys, Conversation")
-        user_input = input("Select a data processor from the options: ").strip()
-        
-        if user_input not in ['AutoDetect', 'CustomKeys', 'Conversation']:
-            print("Invalid choice. Using 'AutoDetect' as the default.")
-            return 'AutoDetect'
-        
-        return user_input
+def main(config_path='config.yaml'):
+    # Attempt to load the configuration from the given path
+    # or prompt the user for necessary setup
+    try:
+        config = ConvectorConfig.from_yaml(config_path)
+    except FileNotFoundError:
+        # If the config file doesn't exist, use the UserInteraction to set it up
+        config = UserInteraction.setup_environment()
+    except Exception as e:
+        # Handle other exceptions that may arise
+        logging.error(f"An error occurred while setting up the configuration: {e}")
+        return
 
 logging.basicConfig(level=logging.INFO)
 
@@ -234,38 +29,36 @@ class Convector:
     """
     Convector is the main class handling the transformation process of conversational data.
     """
-    def __init__(self, config, user_interaction, file_path, is_conversation, output_schema, output_file=None, output_dir=None):
+    def __init__(self, config, user_interaction, file_path, is_conversation=False):
         """Initialization of the Convector object with necessary handlers and configurations."""
-        self.config = config  # Final merged configuration
+        self.config = config  # This is now an instance of ConvectorConfig
         self.user_interaction = user_interaction
-        self.output_file = output_file
-        self.output_dir = self.config.get('output_dir', 'silo')
-
-        # Get output_schema from config if it is not passed explicitly
-        output_schema = output_schema or self.config.get('output_schema', 'default')
-        # Initialize OutputSchemaHandler
-        self.output_schema_handler = OutputSchemaHandler(output_schema)
-        
-
-        # Initialize the FileHandler using the FileHandlerFactory
         self.file_handler = FileHandlerFactory.create_file_handler(file_path, is_conversation)
-        
-        # Retrieve or prompt for CONVECTOR_ROOT_DIR
-        self.convector_root_dir = config_manager.prompt_for_convector_root_dir()
-        
-        # If CONVECTOR_ROOT_DIR is still None, then call a method to determine it
-        if self.convector_root_dir is None:
-            self.convector_root_dir = config_manager.config_data.get('settings', {}).get('CONVECTOR_ROOT_DIR', None)
 
+        # The output_dir is now taken from the ConvectorConfig instance
+        self.output_dir = self.config.get_active_profile().output_dir
+        
+        # Initialize OutputSchemaHandler with the output schema from ConvectorConfig
+        self.output_schema_handler = OutputSchemaHandler(self.config.get_active_profile().output_schema)
+        
+        # No need to prompt for CONVECTOR_ROOT_DIR; it should be handled by ConvectorConfig
+        self.convector_root_dir = self.config.convector_root_dir
+
+        
 
     # Determine the output file path based on the provided or default configurations.
     def get_output_file_path(self):
-        if self.output_file:
-            output_file_path = Path(self.output_dir) / self.output_file
+        # Check if 'output_file' attribute exists in the config and is not None
+        if hasattr(self.config, 'output_file') and self.config.output_file:
+            output_file_path = Path(self.output_dir) / self.config.output_file
         else:
+            # Use default naming convention: original name + '_tr.jsonl'
             input_path = Path(self.file_handler.file_path)
             output_base_name = input_path.stem + '_tr.jsonl'
             output_file_path = Path(self.output_dir) / output_base_name
+
+        # Ensure the directory for the output file exists
+        output_file_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Log the output path
         absolute_path = output_file_path.resolve()
@@ -365,38 +158,55 @@ class Convector:
         return True
 
     def process(self, *args, **kwargs):
+        # The try-except block is good practice to catch unexpected errors.
         try:
-            # Validate the existence of the input file
+            # Validate the existence of the input file using the method already defined.
             if not self.validate_input_file():
                 return
             
-            print("Starting processing...")  # Debugging print
-            
-            output_file_path = self.get_output_file_path()
-            output_file_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            # Create an instance of OutputSchemaHandler
-            output_schema_handler = OutputSchemaHandler(self.config.get('output_schema'))
+            # Initialization print statements are helpful for debugging.
+            print("Starting processing...")
 
-            # Generate transformed data
+            # Get the output file path using the method in the class.
+            output_file_path = self.get_output_file_path()
+            
+            # Ensure the output directory exists. This is critical before opening the file.
+            output_file_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # No need to create another instance of OutputSchemaHandler here, as it's
+            # already done in the __init__ method.
+            # This avoids redundancy and potential mismatches in schema configurations.
+
+            # Generate transformed data by invoking the file handler.
+            # The file handler is responsible for reading and applying transformations to the data.
             transformed_data_generator = self.file_handler.handle_file(
-                input=kwargs.get('input'), 
-                output=kwargs.get('output'), 
-                instruction=kwargs.get('instruction'), 
-                add=kwargs.get('add'), 
-                lines=kwargs.get('lines'), 
-                bytes=kwargs.get('bytes'), 
+                input=kwargs.get('input'),
+                output=kwargs.get('output'),
+                instruction=kwargs.get('instruction'),
+                add=kwargs.get('add'),
+                lines=kwargs.get('lines'),
+                bytes=kwargs.get('bytes'),
                 random_selection=kwargs.get('random_selection'),
             )
 
-            print("Data generation complete...")  # Debugging print
+            # After data generation is complete, inform the user.
+            print("Data generation complete...")
 
-            # Process and save the transformed data
-            self.process_and_save(transformed_data_generator, total_lines=kwargs.get('lines'), bytes=kwargs.get('bytes'), append=kwargs.get('append'))
+            # Process and save the transformed data.
+            # The total_lines and bytes can be limited by the user, passed through kwargs.
+            self.process_and_save(
+                transformed_data_generator,
+                total_lines=kwargs.get('lines'),
+                bytes=kwargs.get('bytes'),
+                append=kwargs.get('append')
+            )
 
-            print("Data processing and saving complete...")  # Debugging print
+            # Inform the user that processing and saving are complete.
+            print("Data processing and saving complete...")
 
         except FileNotFoundError:
+            # Specific error messages are crucial for debugging and user information.
             logging.error(f"The file '{self.file_handler.file_path}' does not exist.")
         except Exception as e:
+            # A catch-all exception handler to log any unexpected errors.
             logging.error(f"An unexpected error occurred while transforming the file: {e}")
