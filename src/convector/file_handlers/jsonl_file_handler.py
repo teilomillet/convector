@@ -1,39 +1,46 @@
+# jsonl_file_handler.py
+
 import json
 import logging
 from typing import Generator, Dict, Any
 from convector.core.base_file_handler import BaseFileHandler
-
+from convector.utils.random_selector import LineRandomSelector, ByteRandomSelector
 
 class JSONLFileHandler(BaseFileHandler):
-    def handle_file(self, input=None, output=None, instruction=None, add=None, lines=None, bytes=None, random_selection=False, conversation=False) -> Generator[Dict[str, Any], None, None]:
-        total_bytes = 0  # Counter to keep track of total bytes processed
+    """
+    JSONLFileHandler is responsible for reading, processing, and yielding transformed 
+    JSON lines from a .jsonl file. It extends BaseFileHandler and utilizes the configuration 
+    provided by ConvectorConfig.
+    """
+
+    def read_file(self):
+        """Generator that reads a JSONL file line by line."""
+        with open(self.file_path, 'r', encoding='utf-8') as file:
+            for line in file:
+                yield line
+
+    def handle_file(self) -> Generator[Dict[str, Any], None, None]:
+        """
+        Processes a JSONL file according to the active profile settings and yields 
+        transformed JSON objects.
+        """
+        logging.debug(f"Type of self.config: {type(self.config)}")
+        total_bytes = 0
         try:
-            with open(self.file_path, 'r') as file:
-                if random_selection:
-                    selected_positions = self.random_selector(file, lines=lines, bytes=bytes, conversation=conversation)
-                    file.seek(0)
+            lines = self.read_file()
+            for line in self.filter_lines(lines):
+                original_data = json.loads(line)
+                transformed_item = self.transform_data(original_data)
 
-                for i, line in enumerate(file):
-                    if random_selection and i not in selected_positions:
-                        continue  # Skip lines not in the selected positions
+                json_line = json.dumps(transformed_item, ensure_ascii=False)
+                line_bytes = len(json_line.encode('utf-8'))
 
-                    if lines and i >= lines:
-                        break  # Stop processing if num_lines is reached
+                if self.active_profile.bytes and total_bytes + line_bytes > self.active_profile.bytes:
+                    break
 
-                    original_data = json.loads(line)
-                    transformed_item = self.handle_data(original_data, input=input, output=output, instruction=instruction, add=add)
-                    
-                    for item in transformed_item:
-                        json_line = json.dumps(item, ensure_ascii=False)
-                        line_bytes = len(json_line.encode('utf-8'))
-
-                        # Check if the bytes limit is reached, if a limit is set
-                        if bytes and total_bytes + line_bytes > bytes:
-                            break
-
-                        total_bytes += line_bytes  # Update the total bytes counter
-                        yield item  # Yield the transformed item for writing
-
+                total_bytes += line_bytes
+                yield transformed_item
         except Exception as e:
             logging.error(f"An error occurred while handling the JSONL file: {e}")
+            raise
 

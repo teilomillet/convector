@@ -43,10 +43,6 @@ class DirectoryProcessor:
                                 config=self.config,  # The configuration dictionary
                                 user_interaction=UserInteraction(),  # Instance for user interaction
                                 file_path=str(file_path),  # Current file path
-                                is_conversation=self.is_conversation,  # Conversation flag
-                                output_schema=self.output_schema,  # Output schema
-                                output_file=self.output_file,
-                                output_dir=self.output_dir
                             )
                             # Now call the process method from Convector
                             convector.process()

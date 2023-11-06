@@ -34,7 +34,7 @@ class FileHandlerFactory:
         FileHandlerFactory._handlers_registry[file_extension] = handler_class
 
     @staticmethod
-    def create_file_handler(file_path: str, is_conversation: bool) -> BaseFileHandler:
+    def create_file_handler(file_path: str, config) -> BaseFileHandler:
         """
         Factory method to instantiate the appropriate FileHandler based on file type and configurations.
         """
@@ -42,6 +42,6 @@ class FileHandlerFactory:
 
         handler_class = FileHandlerFactory._handlers_registry.get(file_extension)
         if handler_class:
-            return handler_class(file_path, is_conversation)
+            return handler_class(file_path, config)
         else:
             raise ValueError(f"Unsupported file type: {file_extension}")

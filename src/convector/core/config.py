@@ -13,10 +13,10 @@ class Profile(BaseSettings):
     Represents a set of configurations for a particular processing profile.
     Attributes can be overridden by CLI arguments or environment variables.
     """
-    output_dir: str = 'silo'  # Default directory for output files
+    output_dir: str = str(Path.home() / 'convector' / 'silo')  # Default directory for output files
     is_conversation: bool = False  # Flag to indicate if the data is conversational
-    input_key: Optional[str] = None  # Key for user inputs
-    output_key: Optional[str] = None  # Key for bot responses
+    input: Optional[str] = None  # Key for user inputs
+    output: Optional[str] = None  # Key for bot responses
     instruction: Optional[str] = None  # Instruction/message key
     additional_fields: Optional[str] = None  # Additional fields to be included
     lines: Optional[int] = None  # Line limit for processing
@@ -25,7 +25,7 @@ class Profile(BaseSettings):
     verbose: bool = False  # Verbose logging
     random_selection: bool = False  # Random data selection
     output_file: Optional[str] = None # Output file name
-    output_schema: Optional[str] = None  # Output schema name
+    output_schema: Optional[str] = 'default'  # Output schema name
     # Additional fields can be added as required
 
     @validator('output_dir', pre=True, always=True)
@@ -52,7 +52,13 @@ class ConvectorConfig(BaseSettings):
     default_profile: str = 'default'
 
     def get_active_profile(self) -> Profile:
-        return self.profiles.get(self.default_profile, Profile())
+        logging.debug(f"Current profiles: {self.profiles}")
+        logging.debug(f"Default profile key: {self.default_profile}")
+        profile = self.profiles.get(self.default_profile, Profile())
+        if not isinstance(profile, Profile):
+            logging.error("Active profile is not an instance of Profile. Check configuration.")
+        return profile
+
     
     def set_and_save(self, key: str, value: Any):
         """

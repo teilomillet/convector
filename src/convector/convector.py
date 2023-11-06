@@ -9,19 +9,6 @@ from convector.utils.output_schema_handler import OutputSchemaHandler
 from convector.core.user_interaction import UserInteraction
 from convector.core.config import ConvectorConfig
 
-def main(config_path='config.yaml'):
-    # Attempt to load the configuration from the given path
-    # or prompt the user for necessary setup
-    try:
-        config = ConvectorConfig.from_yaml(config_path)
-    except FileNotFoundError:
-        # If the config file doesn't exist, use the UserInteraction to set it up
-        config = UserInteraction.setup_environment()
-    except Exception as e:
-        # Handle other exceptions that may arise
-        logging.error(f"An error occurred while setting up the configuration: {e}")
-        return
-
 logging.basicConfig(level=logging.INFO)
 
 # Convector is the main class handling the transformation process of the conversational data.
@@ -29,13 +16,17 @@ class Convector:
     """
     Convector is the main class handling the transformation process of conversational data.
     """
-    def __init__(self, config, user_interaction, file_path, is_conversation=False):
+    def __init__(self, config, user_interaction, file_path):
         """Initialization of the Convector object with necessary handlers and configurations."""
         self.config = config  # This is now an instance of ConvectorConfig
         self.user_interaction = user_interaction
-        self.file_handler = FileHandlerFactory.create_file_handler(file_path, is_conversation)
+        self.file_handler = FileHandlerFactory.create_file_handler(file_path, config)
 
-        # The output_dir is now taken from the ConvectorConfig instance
+        logging.debug(f"Config object type: {type(self.config)}")
+        logging.debug(f"Config object attributes: {dir(self.config)}")
+
+
+        #This will help determine if the config object is correct and has the get_active_profile method.
         self.output_dir = self.config.get_active_profile().output_dir
         
         # Initialize OutputSchemaHandler with the output schema from ConvectorConfig
@@ -43,8 +34,6 @@ class Convector:
         
         # No need to prompt for CONVECTOR_ROOT_DIR; it should be handled by ConvectorConfig
         self.convector_root_dir = self.config.convector_root_dir
-
-        
 
     # Determine the output file path based on the provided or default configurations.
     def get_output_file_path(self):
@@ -106,6 +95,7 @@ class Convector:
         """
         Process the transformed data and save it to the output file.
         """
+        profile = self.config.get_active_profile()  # Retrieve the active profile
         try:
             progress_bar = None
             output_file_path = self.get_output_file_path()
@@ -114,10 +104,10 @@ class Convector:
             # Ensure the output directory exists before opening the file
             output_file_path.parent.mkdir(parents=True, exist_ok=True)
 
-            mode = 'a' if output_file_path.exists() and append else 'w'
+            mode = 'a' if output_file_path.exists() and profile.append else 'w'
             with open(output_file_path, mode, encoding='utf-8') as file:
-                total = bytes or total_lines or 0  # Ensure total is never None
-                unit = " bytes" if bytes else " lines"
+                total = profile.bytes or profile.lines or 0  # Use profile values
+                unit = " bytes" if profile.bytes else " lines"
                 progress_bar = tqdm(total=total, unit=unit, position=0, desc="Processing", leave=True)
                 
                 for items in transformed_data_generator:
@@ -157,56 +147,37 @@ class Convector:
             return False
         return True
 
-    def process(self, *args, **kwargs):
-        # The try-except block is good practice to catch unexpected errors.
+    def process(self):
+        """
+        Processes the input file and writes the output to a file.
+        This method orchestrates the entire process, from reading the input,
+        processing the data, and writing the output.
+        """
         try:
-            # Validate the existence of the input file using the method already defined.
             if not self.validate_input_file():
                 return
             
-            # Initialization print statements are helpful for debugging.
-            print("Starting processing...")
+            logging.info("Starting processing...")
 
-            # Get the output file path using the method in the class.
             output_file_path = self.get_output_file_path()
-            
-            # Ensure the output directory exists. This is critical before opening the file.
             output_file_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # No need to create another instance of OutputSchemaHandler here, as it's
-            # already done in the __init__ method.
-            # This avoids redundancy and potential mismatches in schema configurations.
+            # No CLI arguments are passed to the handle_file method.
+            # The file handler uses the configuration object to control its behavior.
+            transformed_data_generator = self.file_handler.handle_file()
 
-            # Generate transformed data by invoking the file handler.
-            # The file handler is responsible for reading and applying transformations to the data.
-            transformed_data_generator = self.file_handler.handle_file(
-                input=kwargs.get('input'),
-                output=kwargs.get('output'),
-                instruction=kwargs.get('instruction'),
-                add=kwargs.get('add'),
-                lines=kwargs.get('lines'),
-                bytes=kwargs.get('bytes'),
-                random_selection=kwargs.get('random_selection'),
-            )
+            logging.info("Data generation complete...")
 
-            # After data generation is complete, inform the user.
-            print("Data generation complete...")
-
-            # Process and save the transformed data.
-            # The total_lines and bytes can be limited by the user, passed through kwargs.
+            # The process_and_save method handles the writing of transformed data to the output file.
             self.process_and_save(
                 transformed_data_generator,
-                total_lines=kwargs.get('lines'),
-                bytes=kwargs.get('bytes'),
-                append=kwargs.get('append')
+                total_lines = getattr(self.config, 'lines', None),
+                bytes=getattr(self.config, 'bytes', None),
+                append=getattr(self.config, 'append', None),
             )
 
-            # Inform the user that processing and saving are complete.
-            print("Data processing and saving complete...")
-
+            logging.info("Data processing and saving complete...")
         except FileNotFoundError:
-            # Specific error messages are crucial for debugging and user information.
             logging.error(f"The file '{self.file_handler.file_path}' does not exist.")
         except Exception as e:
-            # A catch-all exception handler to log any unexpected errors.
             logging.error(f"An unexpected error occurred while transforming the file: {e}")

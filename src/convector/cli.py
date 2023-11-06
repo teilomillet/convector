@@ -46,7 +46,6 @@ def setup_logging(default_path: str = None, default_level=logging.INFO):
         logging.warning(f"Logging configuration file is not found at '{default_path}'. Using default configs.")
         logging.basicConfig(level=default_level)
 
-
 # Factory classes like ConvectorFactory and DirectoryProcessorFactory encapsulate the 
 # creation logic of Convector and DirectoryProcessor objects, respectively. This follows 
 # the Factory design pattern, making the instantiation process more adaptable to changes.
@@ -62,7 +61,7 @@ class ConvectorFactory:
         is_conversation = getattr(config, 'is_conversation', False)
 
         # Pass 'is_conversation' explicitly
-        convector = Convector(config=config, file_path=file_path, is_conversation=is_conversation, user_interaction=UserInteraction())
+        convector = Convector(config=config, file_path=file_path, user_interaction=UserInteraction())
 
         # The FileHandlerFactory.create_file_handler call should be within the Convector class
         # if it relies on the config being passed to the Convector constructor.
@@ -74,12 +73,22 @@ class ConvectorFactory:
 class DirectoryProcessorFactory:
     @staticmethod
     def create_from_config(final_config, file_path):
-        config_kwargs = {k: v for k, v in final_config.items() if k not in ['output_dir', 'output_file', 'output_schema']}
-        return DirectoryProcessor(
-            directory_path=str(file_path),
-            config=final_config,
-            **config_kwargs
-        )
+        try:
+            logging.debug(f'final_config as dict: {final_config.dict()}')
+            # Extract is_conversation from the final_config
+            is_conversation = getattr(final_config, 'is_conversation', False)
+
+            # Now pass is_conversation to the DirectoryProcessor constructor
+            return DirectoryProcessor(
+                directory_path=str(file_path),
+                config=final_config,
+                is_conversation=is_conversation,
+                # Include other keyword arguments as needed
+            )
+        except AttributeError as e:
+            logging.error(f"Attribute error in DirectoryProcessorFactory: {e}")
+
+
 
 # The echo_info and echo_error functions are wrappers around click's echo function, providing
 # a consistent style for information and error messages throughout the CLI.
@@ -131,8 +140,7 @@ def convector():
     except Exception as e:
         click.echo(f"An error occurred during setup: {e}")
         exit(1)
-
-        
+   
 # The process command is the core of the CLI, allowing users to process conversational data files.
 @convector.command()
 @click.pass_context  # This decorator allows us to pass the Click context into the command function
@@ -213,6 +221,8 @@ def process(ctx, file_path: str,
             output_schema=output_schema,
         )
 
+        logging.debug(f"is_conversation flag is set to: {config.dict().get('is_conversation')}")
+
         # Display messages using UserInteraction
         UserInteraction.show_message("Processing started.", "info")
 
@@ -256,20 +266,6 @@ def set(ctx, key, value):
         echo_info(f"Configuration updated: {key} = {value}")
     except Exception as e:
         click.error(f"An error occurred while updating the configuration: {e}")
-
-@config.command()
-@click.argument('key')
-def get(key):
-    """
-    Get the value of a configuration KEY.
-    """
-    try:
-        with open(CONFIG_FILE, 'r') as file:
-            config = yaml.safe_load(file) or {}
-            value = config.get(key)
-            click.echo(f"{key} = {value}")
-    except Exception as e:
-        click.echo(f"An error occurred while retrieving the configuration: {e}")
 
 # The entry point check ensures that the script is being run directly and not imported as a module.
 if __name__ == "__main__":
