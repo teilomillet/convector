@@ -62,7 +62,7 @@ class BaseFileHandler(ABC):
         Default implementation of data transformation that simply returns the data unchanged.
         Subclasses can override this to implement custom transformation logic.
         """
-        return original_data
+        return self.handle_data(original_data)
 
     def should_stop_processing(self, total_bytes: int, line_bytes: int) -> bool:
         """
