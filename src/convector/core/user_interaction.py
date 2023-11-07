@@ -4,41 +4,59 @@ import logging
 from pathlib import Path
 from convector.core.config import ConvectorConfig
 
+# Define a path for a fixed, persistent configuration file that stores the user's directory preference
+PERSISTENT_CONFIG_PATH = Path.home() / '.convector_config'
+
 class UserInteraction:
 
     @staticmethod
     def setup_environment(config_class=ConvectorConfig):
-        # Check for the default convector directory
-        convector_dir = Path.home() / 'convector'
-        if not convector_dir.exists():
-            if UserInteraction.confirm_action(f"The default directory {convector_dir} does not exist. Do you want to create it?"):
-                convector_dir.mkdir(parents=True, exist_ok=True)
-                UserInteraction.show_message(f"Created the directory {convector_dir}.")
-            else:
-                convector_dir = Path(UserInteraction.prompt_for_input("Please specify the directory for Convector:", type=Path))
-                if not convector_dir.exists():
-                    convector_dir.mkdir(parents=True, exist_ok=True)
-                    UserInteraction.show_message(f"Created the directory {convector_dir}.")
+        # Try to load the persistent configuration first
+        if PERSISTENT_CONFIG_PATH.exists():
+            with open(PERSISTENT_CONFIG_PATH, 'r') as file:
+                convector_dir = Path(file.read().strip())
+        else:
+            # If the persistent config doesn't exist, prompt the user and create it
+            convector_dir = UserInteraction.prompt_for_convector_directory()
 
         # Set the new convector root directory in configuration
         config = config_class()
         config.convector_root_dir = str(convector_dir)
         config.save_to_yaml()  # Save the new configuration immediately
 
-        # Check for the default config file
-        config_path = convector_dir / 'config.yaml'
-        if not config_path.exists():
-            if UserInteraction.confirm_action(f"The configuration file does not exist in {convector_dir}. Do you want to create a new one with default settings?"):
-                config.create_default_config(config_path)
-                UserInteraction.show_message(f"Created the configuration file {config_path}.")
-            else:
-                config_path = Path(UserInteraction.prompt_for_input("Please specify the path to the configuration file:", type=Path))
-                if not config_path.exists():
-                    config_class.create_default_config(config_path)
-                    UserInteraction.show_message(f"Created the configuration file {config_path}.")
-
         # Load and return the configuration
+        config_path = convector_dir / 'config.yaml'
         return config_class.from_yaml(str(config_path))
+
+    @staticmethod
+    def prompt_for_convector_directory():
+        suggested_dir = Path.home() / 'convector'
+        UserInteraction.display_ascii_art()
+        
+        # Ask the user to confirm or provide a new directory
+        user_input = input(f"Enter the directory for Convector (press Enter for default: {suggested_dir}): ").strip()
+        
+        # If the user input is affirmative or empty, use the suggested directory
+        if user_input.lower() in ['yes', 'y', '']:
+            convector_dir = suggested_dir
+        else:
+            # Assume the user input is a new directory path
+            convector_dir = Path(user_input)
+        
+        # Create the directory if it does not exist
+        if not convector_dir.exists():
+            try:
+                convector_dir.mkdir(parents=True, exist_ok=True)
+                UserInteraction.show_message(f"Created the directory {convector_dir}.")
+            except Exception as e:
+                UserInteraction.show_message(f"Could not create the directory {convector_dir}: {e}", "error")
+                exit(1)
+        
+        # Save the user's directory choice for future runs
+        with open(PERSISTENT_CONFIG_PATH, 'w') as file:
+            file.write(str(convector_dir))
+        
+        return convector_dir
 
     @staticmethod
     def confirm_action(prompt, default=False):
@@ -79,7 +97,8 @@ class UserInteraction:
         print("          |/ |#/\#/\#/\/  \#/\#/\  (/|||\) /\#/\#/  \/\#/\#/\|  \|")
         print("          `  |/  V  V  `   V  V /  ||(_)|| \ V  V    ' V  V  '")
         print("                              (ooo / / \ \ ooo)")
-        print("                           `~  CONVECTOR  ~'")
+        print("                              `~  CONVECTOR  ~'")
+        print("                                                                             ")
 
     @staticmethod
     def display_progress(iterable, length, label="Processing"):

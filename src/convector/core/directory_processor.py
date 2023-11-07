@@ -3,21 +3,22 @@ import logging
 from pathlib import Path
 from tqdm import tqdm
 from .file_handler_factory import FileHandlerFactory
-from ..convector import Convector, UserInteraction
+from ..convector import Convector
 from .user_interaction import UserInteraction
+from .config import Profile
 
 # Configuration for retries
 RETRY_ATTEMPTS = 3
 RETRY_DELAY = 5  # in seconds
 
 class DirectoryProcessor:
-    def __init__(self, directory_path: str, config: dict, is_conversation: bool, output_file=None, output_dir=None, output_schema=None, **kwargs):
+    def __init__(self, directory_path: str, profile: Profile, **kwargs):
         self.directory_path = Path(directory_path)
-        self.config = config  # Save the config dictionary
-        self.is_conversation = is_conversation
-        self.output_file = output_file
-        self.output_dir = output_dir
-        self.output_schema = output_schema
+        self.profile = profile  # Save the config dictionary
+        self.is_conversation = profile.is_conversation
+        self.output_file = profile.output_file
+        self.output_dir = profile.output_dir
+        self.output_schema = profile.output_schema
         
         # Store the additional keyword arguments that may be passed to the Convector process method
         self.kwargs = kwargs
@@ -40,7 +41,7 @@ class DirectoryProcessor:
                         try:
                             # Create an instance of Convector for each file
                             convector = Convector(
-                                config=self.config,  # The configuration dictionary
+                                profile=self.profile,  # Pass the Profile object
                                 user_interaction=UserInteraction(),  # Instance for user interaction
                                 file_path=str(file_path),  # Current file path
                             )

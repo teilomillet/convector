@@ -1,3 +1,4 @@
+# file_handler_factory.py
 from pathlib import Path
 
 from ..file_handlers import (
@@ -10,6 +11,7 @@ from ..file_handlers import (
 )
 
 from convector.core.base_file_handler import BaseFileHandler
+from convector.core.config import ConvectorConfig, Profile
 
 class FileHandlerFactory:
     # Registry mapping file extensions to their handlers
@@ -34,7 +36,7 @@ class FileHandlerFactory:
         FileHandlerFactory._handlers_registry[file_extension] = handler_class
 
     @staticmethod
-    def create_file_handler(file_path: str, config) -> BaseFileHandler:
+    def create_file_handler(file_path: str, profile: Profile) -> BaseFileHandler:
         """
         Factory method to instantiate the appropriate FileHandler based on file type and configurations.
         """
@@ -42,6 +44,6 @@ class FileHandlerFactory:
 
         handler_class = FileHandlerFactory._handlers_registry.get(file_extension)
         if handler_class:
-            return handler_class(file_path, config)
+            return handler_class(file_path, profile)  # Pass the profile instance
         else:
             raise ValueError(f"Unsupported file type: {file_extension}")

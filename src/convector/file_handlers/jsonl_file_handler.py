@@ -24,7 +24,7 @@ class JSONLFileHandler(BaseFileHandler):
         Processes a JSONL file according to the active profile settings and yields 
         transformed JSON objects.
         """
-        logging.debug(f"Type of self.config: {type(self.config)}")
+        logging.debug(f"Type of self.config: {type(self.profile)}")
         total_bytes = 0
         try:
             lines = self.read_file()
@@ -35,7 +35,7 @@ class JSONLFileHandler(BaseFileHandler):
                 json_line = json.dumps(transformed_item, ensure_ascii=False)
                 line_bytes = len(json_line.encode('utf-8'))
 
-                if self.active_profile.bytes and total_bytes + line_bytes > self.active_profile.bytes:
+                if self.bytes and total_bytes + line_bytes > self.bytes:
                     break
 
                 total_bytes += line_bytes

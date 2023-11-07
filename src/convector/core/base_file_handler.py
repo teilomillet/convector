@@ -7,26 +7,25 @@ import logging
 
 from ..data_processors.data_processors import IDataProcessor, ConversationDataProcessor, CustomKeysDataProcessor, AutoDetectDataProcessor
 from ..utils.random_selector import IRandomSelector, LineRandomSelector, ByteRandomSelector, ConversationRandomSelector
-from convector.core.config import ConvectorConfig
+from convector.core.config import ConvectorConfig, Profile
 
 logging.basicConfig(level=logging.DEBUG)
 
 class BaseFileHandler(ABC):
-    def __init__(self, file_path: str, config: ConvectorConfig):
+    def __init__(self, file_path: str, profile: Profile):
         self.file_path = file_path
-        self.config = config  # Keep the reference to the ConvectorConfig instance
-        self.active_profile = config.get_active_profile()  # This is now a Profile instance
-        self.is_conversation = self.active_profile.is_conversation
-        self.input = self.active_profile.input
-        self.output = self.active_profile.output
-        self.instruction = self.active_profile.instruction
-        self.add_cols = self.active_profile.additional_fields  # Corrected attribute name
-        self.lines = self.active_profile.lines
-        self.bytes = self.active_profile.bytes
-        self.random_selection = self.active_profile.random_selection
+        self.profile = profile  # Keep the reference to the ConvectorConfig instance
+        self.is_conversation = profile.is_conversation
+        self.input = profile.input
+        self.output = profile.output
+        self.instruction = profile.instruction
+        self.add_cols = profile.add  # Corrected attribute name
+        self.lines = profile.lines
+        self.bytes = profile.bytes
+        self.random_selection = profile.random
         self.data_processor: IDataProcessor = None  # This will be set dynamically
 
-        logging.debug(f"BaseFileHandler initialized with is_conversation: {self.is_conversation}")
+        logging.debug(f"BaseFileHandler initialized with is_conversation: {profile.is_conversation}")
 
     def filter_lines(self, lines: Iterator) -> Iterator:
         """

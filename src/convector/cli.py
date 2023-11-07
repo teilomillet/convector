@@ -12,11 +12,12 @@ from tempfile import NamedTemporaryFile
 
 # Importing necessary classes and functions
 from .core.directory_processor import DirectoryProcessor
-from .core.config import ConvectorConfig
+from .core.config import ConvectorConfig, Profile
 from .core.user_interaction import UserInteraction
 from .convector import Convector
 from .core.file_handler_factory import FileHandlerFactory
 
+PERSISTENT_CONFIG_PATH = Path.home() / '.convector_config'
 
 # Custom exceptions are defined here to provide more meaningful error messages and 
 # to facilitate the capture and handling of specific error conditions within the application.
@@ -30,11 +31,17 @@ class ProcessingError(Exception):
 
 def setup_logging(default_path: str = None, default_level=logging.INFO):
     """Setup logging configuration from a YAML file."""
-    # If no default path is provided, use the ConvectorConfig to determine the default path.
+    # If no default path is provided, try to read the convector_root_dir from .convector_config
     if default_path is None:
-        # Use the existing ConvectorConfig to determine the root directory
-        config = ConvectorConfig()
-        default_path = Path(config.convector_root_dir) / 'config.yaml'
+        # Check if .convector_config exists to get the root directory
+        if PERSISTENT_CONFIG_PATH.exists():
+            with open(PERSISTENT_CONFIG_PATH, 'r') as file:
+                convector_root_dir = file.read().strip()
+                default_path = Path(convector_root_dir) / 'config.yaml'
+        else:
+            # If .convector_config doesn't exist, use the default ConvectorConfig to determine the root directory
+            config = ConvectorConfig()
+            default_path = Path(config.convector_root_dir) / 'config.yaml'
     
     try:
         # Open the YAML configuration file
@@ -51,17 +58,17 @@ def setup_logging(default_path: str = None, default_level=logging.INFO):
 # the Factory design pattern, making the instantiation process more adaptable to changes.
 class ConvectorFactory:
     @staticmethod
-    def create_from_config(config, file_path):
+    def create_from_profile(profile: Profile, file_path):
         # Assuming `is_conversation` is intended to be a flag that indicates
         # whether the file contains conversational data or not.
         # If 'is_conversation' is an expected command-line argument,
         # ensure that it's being set in the config object somewhere after parsing CLI args.
 
         # Check if 'is_conversation' is part of the configuration
-        is_conversation = getattr(config, 'is_conversation', False)
+        is_conversation = profile.is_conversation
 
         # Pass 'is_conversation' explicitly
-        convector = Convector(config=config, file_path=file_path, user_interaction=UserInteraction())
+        convector = Convector(profile=profile, file_path=file_path, user_interaction=UserInteraction())
 
         # The FileHandlerFactory.create_file_handler call should be within the Convector class
         # if it relies on the config being passed to the Convector constructor.
@@ -72,16 +79,16 @@ class ConvectorFactory:
 
 class DirectoryProcessorFactory:
     @staticmethod
-    def create_from_config(final_config, file_path):
+    def create_from_profile(profile, file_path):
         try:
-            logging.debug(f'final_config as dict: {final_config.dict()}')
+            logging.debug(f'profile as dict: {profile.dict()}')
             # Extract is_conversation from the final_config
-            is_conversation = getattr(final_config, 'is_conversation', False)
+            is_conversation = profile.is_conversation
 
             # Now pass is_conversation to the DirectoryProcessor constructor
             return DirectoryProcessor(
                 directory_path=str(file_path),
-                config=final_config,
+                profile=profile,
                 is_conversation=is_conversation,
                 # Include other keyword arguments as needed
             )
@@ -95,19 +102,17 @@ class DirectoryProcessorFactory:
 def echo_info(message: str) -> None:
     click.echo(click.style(message, fg='green'))
 
-# The main data processing function orchestrates the processing of conversational data.
-# It uses the provided file path and configuration to determine the mode of processing (file or directory)
-# and to initialize the appropriate processing class (Convector or DirectoryProcessor).
-def process_conversational_data(file_path: Union[str, Path], config: ConvectorConfig) -> None:
-    file_path = Path(file_path)
+
+# Correct the process_conversational_data function
+def process_conversational_data(file_path: Path, profile: Profile) -> None:
     if file_path.is_dir():
         echo_info("Directory processing mode selected.")
-        directory_processor = DirectoryProcessorFactory.create_from_config(config, file_path)
+        directory_processor = DirectoryProcessorFactory.create_from_profile(profile, file_path)
         directory_processor.process_directory()
         directory_processor.print_summary()
     elif file_path.is_file():
         UserInteraction.show_message(f"Processing file: {file_path}")
-        convector = ConvectorFactory.create_from_config(config, file_path)
+        convector = Convector(profile, UserInteraction(), file_path)
         convector.process()
     else:
         raise ProcessingError("The path provided is neither a file nor a directory.")
@@ -124,19 +129,18 @@ def process_conversational_data(file_path: Union[str, Path], config: ConvectorCo
 def convector():
     """
     Convector - A tool for transforming conversational data to a unified format.
-
     For more detailed information and examples, use --verbose.
     """
-    # Initialize logging at the start
-    setup_logging()  # Initialize logging
-    
     try:
+        # Attempt to setup the environment and load the configuration
+        config = UserInteraction.setup_environment()
+
+        # Store the configuration in the Click context for use in other commands
         ctx = click.get_current_context()
-        ctx.obj = UserInteraction.setup_environment()
-        config_path = ctx.obj.get_config_file_path()
-        if not Path(config_path).exists():
-            # If the config file doesn't exist, create the default one
-            ConvectorConfig.create_default_config(Path(config_path))
+        ctx.obj = config
+
+        echo_info("Convector is ready to use.")
+
     except Exception as e:
         click.echo(f"An error occurred during setup: {e}")
         exit(1)
@@ -201,46 +205,53 @@ def process(ctx, file_path: str,
     """
     # Retrieve the config object from the context
     config = ctx.obj
-    try:
-        # Update config with CLI arguments if provided
-        config.update_from_cli(
-            profile,
-            file_path=file_path,
-            is_conversation=is_conversation,
-            input=input,
-            output=output,
-            instruction=instruction,
-            add=add.split(',') if add else None,  # Convert comma-separated string to list
-            lines=lines,
-            bytes=bytes,
-            output_file=output_file,
-            output_dir=output_dir,
-            append=append,
-            verbose=verbose,
-            random=random,
-            output_schema=output_schema,
-        )
 
-        logging.debug(f"is_conversation flag is set to: {config.dict().get('is_conversation')}")
+    try:
+        # Retrieve the profile specified by the user or use the 'default' profile
+        selected_profile_name = profile if profile else 'default'
+        selected_profile = config.profiles.get(selected_profile_name)
+
+        if not selected_profile:
+            raise ConfigurationError(f"Profile '{selected_profile_name}' not found in configuration.")
+
+        # Collect CLI arguments
+        cli_args = {
+            'is_conversation': is_conversation,
+            'input': input,
+            'output': output,
+            'instruction': instruction,
+            'add': add.split(',') if add else add,  # Convert comma-separated string to list
+            'lines': lines,
+            'bytes': bytes,
+            'output_file': output_file,
+            'output_dir': output_dir,
+            'append': append,
+            'verbose': verbose,
+            'random': random,
+            'output_schema': output_schema,
+        }
+
+        # Update profile settings with CLI arguments if provided
+        for key, value in cli_args.items():
+            if value is not None:  # Only update attributes that have been provided
+                setattr(selected_profile, key, value)
 
         # Display messages using UserInteraction
         UserInteraction.show_message("Processing started.", "info")
 
-        # Process the conversational data with the final configuration
-        process_conversational_data(Path(file_path), config)
+        # Save the updated profile
+        config.save_profile_to_yaml(selected_profile_name)
+
+        # Process the conversational data with the selected profile
+        process_conversational_data(Path(file_path), selected_profile)
 
     except ConfigurationError as e:
-        # Handle specific errors (e.g., validation errors)
         UserInteraction.show_message(f"Configuration Error: {e}", "error")
         exit(1)
-
     except ProcessingError as e:
-        # Handle any other unexpected errors
-        UserInteraction.show_message(f"Configuration Error: {e}", "error")
+        UserInteraction.show_message(f"Processing Error: {e}", "error")
         exit(1)
-
     else:
-        # This block runs if no exceptions were raised
         UserInteraction.show_message("Processing completed.", "info")
 
 # Configuration management commands allow users to get and set configuration values.
@@ -269,5 +280,13 @@ def set(ctx, key, value):
 
 # The entry point check ensures that the script is being run directly and not imported as a module.
 if __name__ == "__main__":
-    setup_logging()  # Initialize logging
-    convector()
+    try:
+        # Set up the application environment and configuration
+        app_config = UserInteraction.setup_environment(ConvectorConfig)
+        # Set up logging based on the loaded configuration
+        setup_logging()
+        # Run the CLI application
+        convector()
+    except Exception as e:
+        logging.error(f"An error occurred during setup: {e}")
+        exit(1)
