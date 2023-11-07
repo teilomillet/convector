@@ -239,8 +239,9 @@ def process(ctx, file_path: str,
         # Display messages using UserInteraction
         UserInteraction.show_message("Processing started.", "info")
 
-        # Save the updated profile
-        config.save_profile_to_yaml(selected_profile_name)
+        # Save the profile if needed
+        if selected_profile_name != 'default':
+            config.save_profile_to_yaml(selected_profile_name)
 
         # Process the conversational data with the selected profile
         process_conversational_data(Path(file_path), selected_profile)
