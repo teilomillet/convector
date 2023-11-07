@@ -1,3 +1,5 @@
+# parquet_file_handler.py
+
 import logging
 import json
 import pandas as pd
@@ -12,10 +14,13 @@ class ParquetFileHandler(BaseFileHandler):
             yield row.to_dict()
 
     def handle_file(self) -> Generator[Dict[str, Any], None, None]:
+        logging.debug(f"Type of self.profile: {type(self.profile)}")
         total_bytes = 0
         try:
-            for row_dict in self.filter_lines(self.read_file()):
+            rows = self.read_file()
+            for row_dict in self.filter_lines(rows):
                 transformed_item = self.transform_data(row_dict)
+
                 json_line = json.dumps(transformed_item, ensure_ascii=False)
                 line_bytes = len(json_line.encode('utf-8'))
 

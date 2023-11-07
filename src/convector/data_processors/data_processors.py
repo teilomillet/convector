@@ -38,7 +38,7 @@ class CustomKeysDataProcessor(IDataProcessor):
         input_key = kwargs.get('input')
         output_key = kwargs.get('output')
         instruction_key = kwargs.get('instruction')
-        add_keys = kwargs.get('add', None)
+        add_keys = kwargs.get('add', [])  # Default to an empty list if not provided
         
         # Check if the necessary keys are in data
         if not (input_key and output_key) or input_key not in data or output_key not in data:
@@ -51,12 +51,12 @@ class CustomKeysDataProcessor(IDataProcessor):
             "output": data.get(output_key, "")
         }
         
-        if add_keys:
-            additional_columns = add_keys.split(',')
-            for col in additional_columns:
-                transformed_data[col] = data.get(col, "")
+        # Directly iterate over add_keys since it is already a list
+        for col in add_keys:
+            transformed_data[col] = data.get(col, "")
 
         return [transformed_data]
+
 
 class AutoDetectDataProcessor(IDataProcessor):
     def process(self, data: Dict[str, Any], **kwargs) -> List[Dict[str, Any]]:

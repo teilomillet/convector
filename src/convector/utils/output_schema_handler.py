@@ -2,8 +2,9 @@ from typing import List, Dict, Optional, Any, Generator
 from inspect import signature
 
 class OutputSchemaHandler:
-    def __init__(self, schema_name: Optional[str] = "default"):
+    def __init__(self, schema_name: Optional[str] = "default", add_keys: Optional[List[str]] = None):
         self.schema_name = schema_name
+        self.add_keys = add_keys 
 
     def batch_data(self, data: List[Dict[str, Any]], batch_size: int) -> Generator[List[Dict[str, Any]], None, None]:
         """
@@ -23,7 +24,7 @@ class OutputSchemaHandler:
         if batch:
             yield batch
 
-    def apply_schema(self, data: Any, batch_size: Optional[int] = None) -> Any:
+    def apply_schema(self, data: Any, batch_size: Optional[int] = None, **kwargs) -> Any:
         is_single_item = isinstance(data, dict)
         if is_single_item:
             data = [data]  # Make it a list to reuse the existing logic
@@ -36,15 +37,17 @@ class OutputSchemaHandler:
             raise ValueError(f"Unsupported schema '{self.schema_name}'")
 
         params = signature(handler_method).parameters
-        use_batching = params.get('use_batching', False)
+        use_batching = 'use_batching' in params
 
         transformed_data = []
         if use_batching and batch_size:
             for batch in self.batch_data(data, batch_size):
-                transformed_batch = handler_method(data=batch)
+                # Pass kwargs to the handler method dynamically
+                transformed_batch = handler_method(data=batch, **kwargs)
                 transformed_data.extend(transformed_batch)
         else:
-            transformed_data = handler_method(data=data)
+            # Pass kwargs to the handler method dynamically
+            transformed_data = handler_method(data=data, **kwargs)
 
         return transformed_data[0] if is_single_item else transformed_data
     
@@ -54,15 +57,23 @@ class OutputSchemaHandler:
         """
         return data
 
-    def apply_chat_completion_schema(self, data: List[Dict[str, Any]], use_batching: bool = True) -> List[Dict[str, Any]]:
-        # Your existing logic to transform data into the chat_completion schema
-        return [
-            {
+    def apply_chat_completion_schema(self, data: List[Dict[str, Any]], add_keys: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        chat_completions = []
+        for item in data:
+            chat_completion = {
                 "messages": [
                     {"role": "system", "content": item.get("instruction", "")},
                     {"role": "user", "content": item.get("input", "")},
                     {"role": "assistant", "content": item.get("output", "")}
                 ]
             }
-            for item in data
-        ]
+            
+            # Include additional fields if provided
+            if add_keys:
+                for add_key in add_keys:
+                    # Add the additional field to the chat_completion dictionary
+                    chat_completion[add_key] = item.get(add_key, "")
+            
+            chat_completions.append(chat_completion)
+
+        return chat_completions

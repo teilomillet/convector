@@ -21,7 +21,7 @@ class CSVFileHandler(BaseFileHandler):
                 json_line = json.dumps(transformed_item, ensure_ascii=False)
                 line_bytes = len(json_line.encode('utf-8'))
 
-                if self.should_stop_processing(total_bytes, line_bytes):
+                if self.profile.bytes and total_bytes + line_bytes > self.profile.bytes:
                     break
 
                 total_bytes += line_bytes
