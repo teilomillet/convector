@@ -28,7 +28,7 @@ class Convector:
 
         # Use the attributes from the profile object directly
         self.output_dir = profile.output_dir
-        self.output_schema_handler = OutputSchemaHandler(profile.output_schema, add_keys=profile.add)
+        self.output_schema_handler = OutputSchemaHandler(profile.output_schema, labels=profile.labels)
 
     # Determine the output file path based on the provided or default configurations.
     def get_output_file_path(self):
@@ -60,7 +60,7 @@ class Convector:
 
             # Transform the item based on the output schema
             if output_schema_handler is not None:  
-                transformed_item = output_schema_handler.apply_schema(item, add_keys=self.profile.add)
+                transformed_item = output_schema_handler.apply_schema(item, labels=self.profile.labels)
             else:
                 transformed_item = item
 

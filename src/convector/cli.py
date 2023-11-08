@@ -155,7 +155,7 @@ def convector():
 @click.option('-i', '--input-key', 'input', help='Key for user inputs.')
 @click.option('-o', '--output-key', 'output', help='Key for bot responses.')
 @click.option('-s', '--schema', 'output_schema', default=None, help='Schema for output data.')
-@click.option('-a', '--add-cols', 'add', help='Columns to include in the output, separated by commas.')
+@click.option('--label', 'labels', help='Columns to include in the output, separated by commas.')
 @click.option('-l', '--limit', 'lines', type=int, help='Limit processing to this number of lines.')
 @click.option('--bytes', type=int, help='Limit processing to this number of bytes.')
 @click.option('-f', '--file-out', 'output_file', type=click.Path(), help='File to write the transformed data to.')
@@ -168,7 +168,7 @@ def process(ctx, file_path: str,
             input: Optional[str], 
             output: Optional[str], 
             instruction: Optional[str], 
-            add: Optional[str], 
+            labels: Optional[str], 
             lines: Optional[int], 
             bytes: Optional[int], 
             output_file: Optional[str], 
@@ -220,7 +220,7 @@ def process(ctx, file_path: str,
             'input': input,
             'output': output,
             'instruction': instruction,
-            'add': add.split(',') if add else add,  # Convert comma-separated string to list
+            'labels': labels.split(',') if labels else labels,  # Convert comma-separated string to list
             'lines': lines,
             'bytes': bytes,
             'output_file': output_file,

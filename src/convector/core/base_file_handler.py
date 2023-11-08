@@ -20,7 +20,7 @@ class BaseFileHandler(ABC):
         self.input = profile.input
         self.output = profile.output
         self.instruction = profile.instruction
-        self.add_cols = profile.add  # Corrected attribute name
+        self.labels = profile.labels  # Corrected attribute name
         self.lines = profile.lines
         self.bytes = profile.bytes
         self.random_selection = profile.random
@@ -141,7 +141,7 @@ class BaseFileHandler(ABC):
         input_key = self.input
         output_key = self.output
         instruction_key = self.instruction
-        add_keys = self.add_cols
+        labels = self.labels
 
         if self.is_conversation: # or self.is_conversational_data(data):
             self.data_processor = ConversationDataProcessor()
@@ -153,5 +153,5 @@ class BaseFileHandler(ABC):
             self.data_processor = AutoDetectDataProcessor()
             logging.debug("Using AutoDetectDataProcessor")
 
-        return self.data_processor.process(data, input=input_key, output=output_key, instruction=instruction_key, add=add_keys)
+        return self.data_processor.process(data, input=input_key, output=output_key, instruction=instruction_key, labels=labels)
 

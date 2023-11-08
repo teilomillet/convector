@@ -2,9 +2,9 @@ from typing import List, Dict, Optional, Any, Generator
 from inspect import signature
 
 class OutputSchemaHandler:
-    def __init__(self, schema_name: Optional[str] = "default", add_keys: Optional[List[str]] = None):
+    def __init__(self, schema_name: Optional[str] = "default", labels: Optional[List[str]] = None):
         self.schema_name = schema_name
-        self.add_keys = add_keys 
+        self.labels = labels 
 
     def batch_data(self, data: List[Dict[str, Any]], batch_size: int) -> Generator[List[Dict[str, Any]], None, None]:
         """
@@ -49,11 +49,11 @@ class OutputSchemaHandler:
 
         return transformed_data[0] if is_single_item else transformed_data
     
-    def apply_default_schema(self, data: List[Dict[str, Any]], add_keys: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+    def apply_default_schema(self, data: List[Dict[str, Any]], labels: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         """
         Default schema that can optionally include additional keys in the data.
         """
-        if add_keys is None:
+        if labels is None:
             return data
 
         # If there are additional keys to add, create a new data list that includes them
@@ -62,15 +62,15 @@ class OutputSchemaHandler:
             # Start with a shallow copy of the original item
             transformed_item = item.copy()
             # Add any additional keys that are missing
-            for add_key in add_keys:
-                if add_key not in transformed_item:
-                    transformed_item[add_key] = item.get(add_key, "")
+            for label in labels:
+                if label not in transformed_item:
+                    transformed_item[label] = item.get(label, "")
             transformed_data.append(transformed_item)
 
         return transformed_data
 
 
-    def apply_chat_completion_schema(self, data: List[Dict[str, Any]], add_keys: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+    def apply_chat_completion_schema(self, data: List[Dict[str, Any]], labels: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         chat_completions = []
         for item in data:
             chat_completion = {
@@ -82,10 +82,10 @@ class OutputSchemaHandler:
             }
             
             # Include additional fields if provided
-            if add_keys:
-                for add_key in add_keys:
+            if labels:
+                for label in labels:
                     # Add the additional field to the chat_completion dictionary
-                    chat_completion[add_key] = item.get(add_key, "")
+                    chat_completion[label] = item.get(label, "")
             
             chat_completions.append(chat_completion)
 
