@@ -15,16 +15,16 @@ logging.basicConfig(level=logging.DEBUG)
 class BaseFileHandler(ABC):
     def __init__(self, file_path: str, profile: Profile):
         self.file_path = file_path
-        self.profile = profile  # Keep the reference to the ConvectorConfig instance
+        self.profile = profile  
         self.is_conversation = profile.is_conversation
         self.input = profile.input
         self.output = profile.output
         self.instruction = profile.instruction
-        self.labels = profile.labels  # Corrected attribute name
+        self.labels = profile.labels  
         self.lines = profile.lines
         self.bytes = profile.bytes
         self.random_selection = profile.random
-        self.data_processor: IDataProcessor = None  # This will be set dynamically
+        self.data_processor: IDataProcessor = None  
 
         logging.debug(f"BaseFileHandler initialized with is_conversation: {profile.is_conversation}")
 
@@ -104,29 +104,25 @@ class BaseFileHandler(ABC):
         elif kwargs.get('bytes'):
             self.random_selector_strategy = ByteRandomSelector()
         else:
-            self.random_selector_strategy = None  # Default, can also be a default strategy
+            self.random_selector_strategy = None  
 
         if self.random_selector_strategy:
             return self.random_selector_strategy.select(*args, **kwargs)
 
     def is_conversational_data(self, data):
-        # Assuming 'data' key contains the messages
         messages = data.get('data', [])
         if not isinstance(messages, list) or len(messages) % 2 != 0:
             return False
 
-        # Perform a sample examination to confirm conversational structure
-        return self.is_conversational_structure(messages[:10])  # Check first 5 pairs
-
+        return self.is_conversational_structure(messages[:10])  
+    
     def is_conversational_structure(self, sample_data):
-        # Placeholder for logic to check if the sample_data follows the conversational pattern
         for i in range(0, len(sample_data), 2):
             if not self.is_valid_message_pair(sample_data[i], sample_data[i+1]):
                 return False
         return True
 
     def is_valid_message_pair(self, user_message, assistant_message):
-        # Placeholder for validation logic using keyword and pronoun analysis
         if not user_message or not assistant_message:
             return False
 

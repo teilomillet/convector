@@ -27,7 +27,7 @@ class ConversationDataProcessor(IDataProcessor):
                 })
             except Exception as e:
                 logging.error(f"Error processing conversation pair at index {i}: {e}")
-                continue  # Skip this pair of messages and continue
+                continue 
 
         return transformed_data
 
@@ -38,9 +38,8 @@ class CustomKeysDataProcessor(IDataProcessor):
         input_key = kwargs.get('input')
         output_key = kwargs.get('output')
         instruction_key = kwargs.get('instruction')
-        labels = kwargs.get('labels', [])  # Default to an empty list if not provided
+        labels = kwargs.get('labels', [])  
         
-        # Check if the necessary keys are in data
         if not (input_key and output_key) or input_key not in data or output_key not in data:
             logging.error(f"The necessary keys are missing or do not match the data structure. Data keys: {list(data.keys())}")
             raise ValueError("The necessary keys are missing or do not match the data structure.")
@@ -51,7 +50,6 @@ class CustomKeysDataProcessor(IDataProcessor):
             "output": data.get(output_key, "")
         }
         
-        # Directly iterate over labels since it is already a list
         for col in labels:
             transformed_data[col] = data.get(col, "")
 
@@ -60,7 +58,6 @@ class CustomKeysDataProcessor(IDataProcessor):
 
 class AutoDetectDataProcessor(IDataProcessor):
     def __init__(self):
-        # Schema patterns can be loaded from a config or defined here.
         self.schema_patterns = {
             "instruction": ["instruction", "system", "system_prompt"],
             "input": ["question", "input", "user_query"],
@@ -69,10 +66,8 @@ class AutoDetectDataProcessor(IDataProcessor):
         self.detected_schema = {}
 
     def process(self, data: Dict[str, Any], **kwargs) -> List[Dict[str, Any]]:
-        # Detect schema once and store it
         self.detect_schema(data)
 
-        # Use detected schema to transform data
         transformed_data = [{
             "instruction": data.get(self.detected_schema.get("instruction", ""), ""),
             "input": data.get(self.detected_schema.get("input", ""), ""),
@@ -82,11 +77,10 @@ class AutoDetectDataProcessor(IDataProcessor):
         return transformed_data
 
     def detect_schema(self, data: Dict[str, Any]):
-        # Iterate once over the data keys and match with schema patterns
         for key in data.keys():
             for schema, variants in self.schema_patterns.items():
                 if key in variants:
                     self.detected_schema[schema] = key
-                    break  # Move to the next key after a match is found
-            if len(self.detected_schema) == len(self.schema_patterns):  # Early exit if all schema keys are found
+                    break  
+            if len(self.detected_schema) == len(self.schema_patterns):
                 break

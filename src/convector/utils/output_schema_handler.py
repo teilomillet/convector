@@ -27,8 +27,8 @@ class OutputSchemaHandler:
     def apply_schema(self, data: Any, batch_size: Optional[int] = None, **kwargs) -> Any:
         is_single_item = isinstance(data, dict)
         if is_single_item:
-            data = [data]  # Make it a list to reuse the existing logic
-
+            data = [data]  
+            
         if not all(isinstance(item, dict) for item in data):
             raise TypeError("apply_schema expects a list of dictionaries or a single dictionary.")
 
@@ -56,12 +56,9 @@ class OutputSchemaHandler:
         if labels is None:
             return data
 
-        # If there are additional keys to add, create a new data list that includes them
         transformed_data = []
         for item in data:
-            # Start with a shallow copy of the original item
             transformed_item = item.copy()
-            # Add any additional keys that are missing
             for label in labels:
                 if label not in transformed_item:
                     transformed_item[label] = item.get(label, "")
@@ -81,10 +78,8 @@ class OutputSchemaHandler:
                 ]
             }
             
-            # Include additional fields if provided
             if labels:
                 for label in labels:
-                    # Add the additional field to the chat_completion dictionary
                     chat_completion[label] = item.get(label, "")
             
             chat_completions.append(chat_completion)

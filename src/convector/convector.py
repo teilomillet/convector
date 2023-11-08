@@ -11,43 +11,35 @@ from convector.core.config import ConvectorConfig, Profile
 
 logging.basicConfig(level=logging.INFO)
 
-# Convector is the main class handling the transformation process of the conversational data.
 class Convector:
     """
     Convector is the main class handling the transformation process of conversational data.
     """
     def __init__(self, profile: Profile, user_interaction, file_path):
         """Initialization of the Convector object with necessary handlers and configurations."""
-        self.profile = profile  # This is now an instance of ConvectorConfig
+        self.profile = profile 
         self.user_interaction = user_interaction
         self.file_handler = FileHandlerFactory.create_file_handler(file_path, profile)
 
         logging.debug(f"Config object type: {type(self.profile)}")
         logging.debug(f"Config object attributes: {dir(self.profile)}")
 
-
-        # Use the attributes from the profile object directly
         self.output_dir = profile.output_dir
         self.output_schema_handler = OutputSchemaHandler(profile.output_schema, labels=profile.labels)
 
-    # Determine the output file path based on the provided or default configurations.
     def get_output_file_path(self):
-        # Check if 'output_file' attribute exists in the config and is not None
         if hasattr(self.profile, 'output_file') and self.profile.output_file:
             output_file_path = Path(self.output_dir) / self.profile.output_file
         else:
-            # Use default naming convention: original name + '_tr.jsonl'
             input_path = Path(self.file_handler.file_path)
             output_base_name = input_path.stem + '_tr.jsonl'
             output_file_path = Path(self.output_dir) / output_base_name
 
-        # Ensure the directory for the output file exists
         output_file_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Log the output path
         absolute_path = output_file_path.resolve()
         logging.info(f"Output will be saved to: {absolute_path}")
-        print(f"Output will be saved to: {absolute_path}")  # This will print to console
+        print(f"Output will be saved to: {absolute_path}")
         return output_file_path
 
     def write_to_file(self, file, item, lines_written, total_bytes_written, total_lines, bytes, output_schema_handler):
@@ -58,7 +50,6 @@ class Convector:
             if total_lines and lines_written >= total_lines:
                 return lines_written, total_bytes_written, True
 
-            # Transform the item based on the output schema
             if output_schema_handler is not None:  
                 transformed_item = output_schema_handler.apply_schema(item, labels=self.profile.labels)
             else:
@@ -67,7 +58,6 @@ class Convector:
             try:
                 if not isinstance(transformed_item, dict):
                     print(f"Error: Expected a dictionary but got {type(transformed_item)}")
-                    # handle the error appropriately, perhaps with a 'raise' or 'return'
                 else:
                     transformed_item['source'] = os.path.basename(self.file_handler.file_path)
             except Exception as e:
@@ -90,23 +80,22 @@ class Convector:
         """
         Process the transformed data and save it to the output file.
         """
-        profile = self.profile  # Retrieve the active profile
+        profile = self.profile
         try:
             progress_bar = None
             output_file_path = self.get_output_file_path()
             lines_written, total_bytes_written = 0, 0
             
-            # Ensure the output directory exists before opening the file
             output_file_path.parent.mkdir(parents=True, exist_ok=True)
 
             mode = 'a' if output_file_path.exists() and profile.append else 'w'
             with open(output_file_path, mode, encoding='utf-8') as file:
-                total = profile.bytes or profile.lines or 0  # Use profile values
+                total = profile.bytes or profile.lines or 0 
                 unit = " bytes" if profile.bytes else " lines"
                 progress_bar = tqdm(total=total, unit=unit, position=0, desc="Processing", leave=True)
                 
                 for items in transformed_data_generator:
-                    if isinstance(items, dict):  # if items is a single dictionary
+                    if isinstance(items, dict):
                         items = [items]
                     for item in items:
                         lines_written, total_bytes_written, done = self.write_to_file(
@@ -118,7 +107,6 @@ class Convector:
                 
                 progress_bar.close()
                 
-            # Display the results after processing is complete
             self.display_results(output_file_path, lines_written, total_bytes_written)
             
         except FileNotFoundError:
@@ -132,7 +120,7 @@ class Convector:
                 progress_bar.close()
 
     def display_results(self, output_file_path, lines_written, total_bytes_written):
-        print("Displaying results...")  # Debugging print
+        print("Displaying results...")  # Debug
         absolute_path = Path(output_file_path).resolve()
         print(f"\nDelivered to file://{absolute_path} \n({lines_written} lines, {total_bytes_written} bytes)")
 
@@ -157,13 +145,10 @@ class Convector:
             output_file_path = self.get_output_file_path()
             output_file_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # No CLI arguments are passed to the handle_file method.
-            # The file handler uses the configuration object to control its behavior.
             transformed_data_generator = self.file_handler.handle_file()
 
             logging.info("Data generation complete...")
 
-            # The process_and_save method handles the writing of transformed data to the output file.
             self.process_and_save(
                 transformed_data_generator,
                 total_lines = self.profile.lines,

@@ -14,7 +14,6 @@ from convector.core.base_file_handler import BaseFileHandler
 from convector.core.config import ConvectorConfig, Profile
 
 class FileHandlerFactory:
-    # Registry mapping file extensions to their handlers
     _handlers_registry = {
         'json': JSONFileHandler,
         'jsonl': JSONLFileHandler,
@@ -40,10 +39,10 @@ class FileHandlerFactory:
         """
         Factory method to instantiate the appropriate FileHandler based on file type and configurations.
         """
-        file_extension = Path(file_path).suffix[1:].lower()  # Using pathlib for extension extraction
+        file_extension = Path(file_path).suffix[1:].lower() 
 
         handler_class = FileHandlerFactory._handlers_registry.get(file_extension)
         if handler_class:
-            return handler_class(file_path, profile)  # Pass the profile instance
+            return handler_class(file_path, profile)  
         else:
             raise ValueError(f"Unsupported file type: {file_extension}")
