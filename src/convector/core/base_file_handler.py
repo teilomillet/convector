@@ -4,6 +4,7 @@ import json
 from abc import ABC, abstractmethod
 from typing import Generator, Dict, Any, Iterator
 import logging
+import re
 
 from ..data_processors.data_processors import IDataProcessor, ConversationDataProcessor, CustomKeysDataProcessor, AutoDetectDataProcessor
 from ..utils.random_selector import IRandomSelector, LineRandomSelector, ByteRandomSelector, ConversationRandomSelector
@@ -108,6 +109,30 @@ class BaseFileHandler(ABC):
         if self.random_selector_strategy:
             return self.random_selector_strategy.select(*args, **kwargs)
 
+    def is_conversational_data(self, data):
+        # Assuming 'data' key contains the messages
+        messages = data.get('data', [])
+        if not isinstance(messages, list) or len(messages) % 2 != 0:
+            return False
+
+        # Perform a sample examination to confirm conversational structure
+        return self.is_conversational_structure(messages[:10])  # Check first 5 pairs
+
+    def is_conversational_structure(self, sample_data):
+        # Placeholder for logic to check if the sample_data follows the conversational pattern
+        for i in range(0, len(sample_data), 2):
+            if not self.is_valid_message_pair(sample_data[i], sample_data[i+1]):
+                return False
+        return True
+
+    def is_valid_message_pair(self, user_message, assistant_message):
+        # Placeholder for validation logic using keyword and pronoun analysis
+        if not user_message or not assistant_message:
+            return False
+
+        user_keywords = re.findall(r"\b(what|how|can you)\b", user_message, re.IGNORECASE)
+        assistant_keywords = re.findall(r"\b(did|will|understand)\b", assistant_message, re.IGNORECASE)
+        return bool(user_keywords) and bool(assistant_keywords)
     
     def handle_data(self, data):
         """
@@ -118,15 +143,15 @@ class BaseFileHandler(ABC):
         instruction_key = self.instruction
         add_keys = self.add_cols
 
-        if self.is_conversation:
+        if self.is_conversation: # or self.is_conversational_data(data):
             self.data_processor = ConversationDataProcessor()
-            # logging.debug("Using ConversationDataProcessor")
+            logging.debug("Using ConversationDataProcessor")
         elif input_key and output_key:
             self.data_processor = CustomKeysDataProcessor()
-            # logging.debug("Using CustomKeysDataProcessor")
+            logging.debug("Using CustomKeysDataProcessor")
         else:
             self.data_processor = AutoDetectDataProcessor()
-            # logging.debug("Using AutoDetectDataProcessor")
+            logging.debug("Using AutoDetectDataProcessor")
 
         return self.data_processor.process(data, input=input_key, output=output_key, instruction=instruction_key, add=add_keys)
 

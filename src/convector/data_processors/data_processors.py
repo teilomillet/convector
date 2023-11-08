@@ -59,25 +59,34 @@ class CustomKeysDataProcessor(IDataProcessor):
 
 
 class AutoDetectDataProcessor(IDataProcessor):
+    def __init__(self):
+        # Schema patterns can be loaded from a config or defined here.
+        self.schema_patterns = {
+            "instruction": ["instruction", "system", "system_prompt"],
+            "input": ["question", "input", "user_query"],
+            "output": ["answer", "output", "bot_reply", "response"]
+        }
+        self.detected_schema = {}
+
     def process(self, data: Dict[str, Any], **kwargs) -> List[Dict[str, Any]]:
-        transformed_data = []
-        keys_variants = [
-            ("question", "answer", "instruction"),
-            ("Q", "A", "instruction"),
-            ("user_message", "bot_message", "instruction"),
-            ("user", "bot", "instruction"),
-            ("input", "output", "instruction"),
-            ("user_query", "bot_reply", "system")
-        ]
-        
-        for variant in keys_variants:
-            input, output, instruction = variant
-            if input in data and output in data:
-                transformed_data.append({
-                    "instruction": data.get(instruction, ""),
-                    "input": data[input],
-                    "output": data[output]
-                })
-                break
-        
+        # Detect schema once and store it
+        self.detect_schema(data)
+
+        # Use detected schema to transform data
+        transformed_data = [{
+            "instruction": data.get(self.detected_schema.get("instruction", ""), ""),
+            "input": data.get(self.detected_schema.get("input", ""), ""),
+            "output": data.get(self.detected_schema.get("output", ""), "")
+        }] if self.detected_schema else []
+
         return transformed_data
+
+    def detect_schema(self, data: Dict[str, Any]):
+        # Iterate once over the data keys and match with schema patterns
+        for key in data.keys():
+            for schema, variants in self.schema_patterns.items():
+                if key in variants:
+                    self.detected_schema[schema] = key
+                    break  # Move to the next key after a match is found
+            if len(self.detected_schema) == len(self.schema_patterns):  # Early exit if all schema keys are found
+                break

@@ -42,20 +42,33 @@ class OutputSchemaHandler:
         transformed_data = []
         if use_batching and batch_size:
             for batch in self.batch_data(data, batch_size):
-                # Pass kwargs to the handler method dynamically
                 transformed_batch = handler_method(data=batch, **kwargs)
                 transformed_data.extend(transformed_batch)
         else:
-            # Pass kwargs to the handler method dynamically
             transformed_data = handler_method(data=data, **kwargs)
 
         return transformed_data[0] if is_single_item else transformed_data
     
-    def apply_default_schema(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def apply_default_schema(self, data: List[Dict[str, Any]], add_keys: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         """
-        Default schema that does nothing and returns the data as-is.
+        Default schema that can optionally include additional keys in the data.
         """
-        return data
+        if add_keys is None:
+            return data
+
+        # If there are additional keys to add, create a new data list that includes them
+        transformed_data = []
+        for item in data:
+            # Start with a shallow copy of the original item
+            transformed_item = item.copy()
+            # Add any additional keys that are missing
+            for add_key in add_keys:
+                if add_key not in transformed_item:
+                    transformed_item[add_key] = item.get(add_key, "")
+            transformed_data.append(transformed_item)
+
+        return transformed_data
+
 
     def apply_chat_completion_schema(self, data: List[Dict[str, Any]], add_keys: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         chat_completions = []
