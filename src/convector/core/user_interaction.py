@@ -10,43 +10,57 @@ class UserInteraction:
 
     @staticmethod
     def setup_environment(config_class=ConvectorConfig):
-        if PERSISTENT_CONFIG_PATH.exists():
-            with open(PERSISTENT_CONFIG_PATH, 'r') as file:
-                convector_dir = Path(file.read().strip())
-        else:
-            convector_dir = UserInteraction.prompt_for_convector_directory()
-
+        convector_dir = UserInteraction.get_convector_directory()
         config = config_class()
         config.convector_root_dir = str(convector_dir)
-        config.save_to_yaml()  
+        config.save_to_yaml()
 
         config_path = convector_dir / 'config.yaml'
         return config_class.from_yaml(str(config_path))
 
     @staticmethod
+    def get_convector_directory():
+        if PERSISTENT_CONFIG_PATH.exists():
+            return UserInteraction.read_convector_directory()
+        else:
+            return UserInteraction.prompt_for_convector_directory()
+
+    @staticmethod
+    def read_convector_directory():
+        try:
+            with open(PERSISTENT_CONFIG_PATH, 'r') as file:
+                return Path(file.read().strip())
+        except Exception as e:
+            logging.error(f"Error reading Convector directory: {e}")
+            raise
+
+    @staticmethod
     def prompt_for_convector_directory():
         suggested_dir = Path.home() / 'convector'
         UserInteraction.display_ascii_art()
-        
+
         user_input = input(f"Enter the directory for Convector (press Enter for default: {suggested_dir}): ").strip()
-        
-        if user_input.lower() in ['yes', 'y', '']:
-            convector_dir = suggested_dir
-        else:
-            convector_dir = Path(user_input)
-        
-        if not convector_dir.exists():
-            try:
-                convector_dir.mkdir(parents=True, exist_ok=True)
-                UserInteraction.show_message(f"Created the directory {convector_dir}.")
-            except Exception as e:
-                UserInteraction.show_message(f"Could not create the directory {convector_dir}: {e}", "error")
-                exit(1)
-        
-        with open(PERSISTENT_CONFIG_PATH, 'w') as file:
-            file.write(str(convector_dir))
-        
+        convector_dir = Path(user_input) if user_input else suggested_dir
+        UserInteraction.ensure_directory_exists(convector_dir)
+        UserInteraction.save_convector_directory(convector_dir)
         return convector_dir
+
+    @staticmethod
+    def ensure_directory_exists(directory):
+        try:
+            directory.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            logging.error(f"Could not create the directory {directory}: {e}")
+            raise
+
+    @staticmethod
+    def save_convector_directory(directory):
+        try:
+            with open(PERSISTENT_CONFIG_PATH, 'w') as file:
+                file.write(str(directory))
+        except Exception as e:
+            logging.error(f"Could not save Convector directory: {e}")
+            raise
 
     @staticmethod
     def confirm_action(prompt, default=False):
