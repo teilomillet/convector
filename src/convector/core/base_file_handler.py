@@ -8,7 +8,9 @@ import re
 
 from ..data_processors.data_processors import IDataProcessor, ConversationDataProcessor, CustomKeysDataProcessor, AutoDetectDataProcessor
 from ..utils.random_selector import IRandomSelector, LineRandomSelector, ByteRandomSelector, ConversationRandomSelector
-from convector.core.config import ConvectorConfig, Profile
+# from convector.core.config import ConvectorConfig, Profile
+from convector.core.convector_config import ConvectorConfig
+from convector.core.profile import Profile
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -141,13 +143,10 @@ class BaseFileHandler(ABC):
 
         if self.is_conversation: # or self.is_conversational_data(data):
             self.data_processor = ConversationDataProcessor()
-            logging.debug("Using ConversationDataProcessor")
         elif input_key and output_key:
             self.data_processor = CustomKeysDataProcessor()
-            logging.debug("Using CustomKeysDataProcessor")
         else:
             self.data_processor = AutoDetectDataProcessor()
-            logging.debug("Using AutoDetectDataProcessor")
 
         return self.data_processor.process(data, input=input_key, output=output_key, instruction=instruction_key, labels=labels)
 

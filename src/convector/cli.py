@@ -11,7 +11,8 @@ from tempfile import NamedTemporaryFile
 
 
 from .core.directory_processor import DirectoryProcessor
-from .core.config import ConvectorConfig, Profile
+from convector.core.profile import Profile
+from convector.core.convector_config import ConvectorConfig
 from .core.user_interaction import UserInteraction
 from .convector import Convector
 from .core.file_handler_factory import FileHandlerFactory

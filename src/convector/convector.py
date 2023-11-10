@@ -7,7 +7,7 @@ from contextlib import contextmanager
 
 from convector.core.file_handler_factory import FileHandlerFactory
 from convector.utils.output_schema_handler import OutputSchemaHandler
-from convector.core.config import Profile
+from convector.core.profile import Profile
 
 logging.basicConfig(level=logging.INFO)
 
