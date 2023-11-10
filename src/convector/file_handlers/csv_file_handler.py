@@ -8,24 +8,33 @@ from convector.core.base_file_handler import BaseFileHandler
 
 class CSVFileHandler(BaseFileHandler):
     def read_file(self) -> Iterator:
+        """
+        Generator that reads a CSV file and yields each row as a dictionary.
+        """
         with open(self.file_path, newline='', encoding='utf-8') as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
                 yield row
 
+    def transform_data(self, original_data):
+        """
+        Transforms a row from the CSV file. 
+        Override this method if a different transformation is required.
+        """
+        # Default transformation is to simply return the data as is.
+        # Custom transformation logic can be implemented here.
+        return original_data
+
     def handle_file(self) -> Generator[Dict[str, Any], None, None]:
-        total_bytes = 0
+        """
+        Processes a CSV file according to the active profile settings and yields 
+        transformed rows.
+        """
+        logging.debug(f"Handling CSV file with profile: {self.profile}")
         try:
-            for row in self.filter_lines(self.read_file()):
-                transformed_item = self.transform_data(row)
-                json_line = json.dumps(transformed_item, ensure_ascii=False)
-                line_bytes = len(json_line.encode('utf-8'))
-
-                if self.profile.bytes and total_bytes + line_bytes > self.profile.bytes:
-                    break
-
-                total_bytes += line_bytes
-                yield transformed_item
+            for transformed_item in super().handle_file():
+                if transformed_item is not None:
+                    yield transformed_item
         except Exception as e:
             logging.error(f"An error occurred while handling the CSV file: {e}")
             raise

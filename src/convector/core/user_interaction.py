@@ -10,6 +10,7 @@ class UserInteraction:
 
     @staticmethod
     def setup_environment(config_class=ConvectorConfig):
+        """ Set up the environment by defining the root directory for Convector"""
         convector_dir = UserInteraction.get_convector_directory()
         config = config_class()
         config.convector_root_dir = str(convector_dir)
@@ -20,6 +21,7 @@ class UserInteraction:
 
     @staticmethod
     def get_convector_directory():
+        """ Get the Convector directory, either by reading from persistent config or prompting the user"""
         if PERSISTENT_CONFIG_PATH.exists():
             return UserInteraction.read_convector_directory()
         else:
@@ -27,6 +29,7 @@ class UserInteraction:
 
     @staticmethod
     def read_convector_directory():
+        """ Read the Convector directory path from a persistent file"""
         try:
             with open(PERSISTENT_CONFIG_PATH, 'r') as file:
                 return Path(file.read().strip())
@@ -36,6 +39,7 @@ class UserInteraction:
 
     @staticmethod
     def prompt_for_convector_directory():
+        """ Prompt the user for the Convector directory, offering a default"""
         suggested_dir = Path.home() / 'convector'
         UserInteraction.display_ascii_art()
 
@@ -47,6 +51,7 @@ class UserInteraction:
 
     @staticmethod
     def ensure_directory_exists(directory):
+        """ Ensure the specified directory exists, create if it doesn't"""
         try:
             directory.mkdir(parents=True, exist_ok=True)
         except Exception as e:
@@ -55,6 +60,7 @@ class UserInteraction:
 
     @staticmethod
     def save_convector_directory(directory):
+        """ Save the Convector directory path to a persistent file"""
         try:
             with open(PERSISTENT_CONFIG_PATH, 'w') as file:
                 file.write(str(directory))
@@ -64,18 +70,21 @@ class UserInteraction:
 
     @staticmethod
     def confirm_action(prompt, default=False):
+        """ Confirm an action with the user, logging the response"""
         response = click.confirm(prompt, default=default)
         logging.info(f"User response to confirm action '{prompt}': {response}")
         return response
 
     @staticmethod
     def prompt_for_input(prompt, default=None, type=None):
+        """ Prompt the user for input, logging the response"""
         response = click.prompt(prompt, default=default, type=type)
         logging.info(f"User provided input for '{prompt}': {response}")
         return response
 
     @staticmethod
     def show_message(message, message_type="info"):
+        """ Display a styled message to the user"""
         if message_type == "info":
             click.echo(click.style(message, fg='green'))
         elif message_type == "warning":
@@ -104,6 +113,7 @@ class UserInteraction:
 
     @staticmethod
     def display_progress(iterable, length, label="Processing"):
+        """ Display a progress bar for an iterable process"""
         with click.progressbar(iterable, length=length, label=label) as bar:
             for item in bar:
                 yield item

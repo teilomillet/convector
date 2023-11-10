@@ -7,6 +7,8 @@ from ..file_handlers import (
     CSVFileHandler, 
     ParquetFileHandler, 
     ZSTFileHandler,  
+    JSONGZFileHandler,
+    TXTFileHandler,
     # Add other file handlers as needed
 )
 
@@ -17,6 +19,8 @@ class FileHandlerFactory:
     _handlers_registry = {
         'json': JSONFileHandler,
         'jsonl': JSONLFileHandler,
+        'json.gz': JSONGZFileHandler,
+        'txt': TXTFileHandler,
         'csv': CSVFileHandler,
         'parquet': ParquetFileHandler,
         'zst': ZSTFileHandler
