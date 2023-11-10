@@ -45,7 +45,6 @@ setup(
         'tqdm',
         'pandas',
         'zstandard',
-        'polars'
         # Add other dependencies here
     ],
     

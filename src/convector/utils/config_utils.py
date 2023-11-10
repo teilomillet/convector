@@ -1,7 +1,7 @@
 import yaml
 import logging
 from pathlib import Path
-from core.convector_config import ConvectorConfig
+from convector.core.convector_config import ConvectorConfig
 
 PERSISTENT_CONFIG_PATH = Path.home() / '.convector_config'
 

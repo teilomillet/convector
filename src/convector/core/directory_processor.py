@@ -5,7 +5,7 @@ from tqdm import tqdm
 from .file_handler_factory import FileHandlerFactory
 from ..convector import Convector
 from .user_interaction import UserInteraction
-from .config import Profile
+from convector.core.profile import Profile
 
 RETRY_ATTEMPTS = 3
 RETRY_DELAY = 5  # in seconds

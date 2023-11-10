@@ -11,7 +11,7 @@ from ..file_handlers import (
 )
 
 from convector.core.base_file_handler import BaseFileHandler
-from convector.core.config import ConvectorConfig, Profile
+from convector.core.profile import Profile
 
 class FileHandlerFactory:
     _handlers_registry = {

@@ -2,7 +2,7 @@ import click
 import os
 import logging
 from pathlib import Path
-from convector.core.config import ConvectorConfig
+from convector.core.convector_config import ConvectorConfig
 
 PERSISTENT_CONFIG_PATH = Path.home() / '.convector_config'
 
