@@ -8,110 +8,109 @@ from pathlib import Path
 PERSISTENT_CONFIG_PATH = Path.home() / '.convector_config'
 
 class ConvectorConfig(BaseSettings):
-    """
-    Holds the global configuration for Convector, including version and profiles.
-    Provides methods to load configurations from a YAML file and update settings via CLI.
-    """
     version: float = 1.0  
     profiles: Dict[str, Profile] = {} 
-    convector_root_dir: str = str(Path.home() / 'convector') # Default root directory
+    convector_root_dir: str = str(Path.home() / 'convector') 
     default_profile: str = 'default'
 
     def get_active_profile(self) -> Profile:
+        return self.retrieve_profile(self.default_profile)
+
+    def retrieve_profile(self, profile_name: str) -> Profile:
         logging.debug(f"Current profiles: {self.profiles}")
         logging.debug(f"Default profile key: {self.default_profile}")
-        profile = self.profiles.get(self.default_profile, Profile())
-        if not isinstance(profile, Profile):
-            logging.error("Active profile is not an instance of Profile. Check configuration.")
+        profile = self.profiles.get(profile_name, Profile())
+        self.validate_profile_instance(profile)
         return profile
-    
+
+    @staticmethod
+    def validate_profile_instance(profile):
+        if not isinstance(profile, Profile):
+            logging.error("Provided profile is not an instance of Profile. Check configuration.")
+            raise TypeError("Invalid profile instance")
+
     def save_to_yaml(self):
-        """Save the profiles configuration to the YAML file, merging with existing profiles."""
+        config_path = self.get_config_file_path()
+        self.write_config_to_yaml(config_path, self.compile_profiles_data())
+
+    def compile_profiles_data(self) -> Dict[str, Any]:
+        current_config = self.read_current_config()
+        updated_profiles = {name: profile.dict() for name, profile in self.profiles.items()}
+        current_profiles = current_config.get('profiles', {})
+        merged_profiles = {**current_profiles, **updated_profiles}
+        current_config['profiles'] = merged_profiles
+        return current_config
+
+    def write_config_to_yaml(self, config_path: Path, config_data: Dict[str, Any]):
         try:
-            config_path = self.get_config_file_path()
-            current_config = {}
-
-            if config_path.exists():
-                with open(config_path, 'r') as file:
-                    current_config = yaml.safe_load(file) or {}
-
-            updated_profiles = {name: profile.dict() for name, profile in self.profiles.items()}
-            current_profiles = current_config.get('profiles', {})
-            merged_profiles = {**current_profiles, **updated_profiles}
-
-            current_config['profiles'] = merged_profiles
-
             with open(config_path, 'w') as file:
-                yaml.safe_dump(current_config, file)
-
-            logging.info(f"Profiles configuration saved to {config_path}")
+                yaml.safe_dump(config_data, file)
+            logging.info(f"Configuration saved to {config_path}")
         except Exception as e:
-            logging.error(f"Failed to save profiles configuration to {config_path}: {e}")
-            raise e
-    
-    def save_profile_to_yaml(self, profile_name: str):
-        """Save the updated profile to the YAML file."""
-        try:
-            config_path = self.get_config_file_path()
-            current_config = {}
-
-            if config_path.exists():
-                with open(config_path, 'r') as file:
-                    current_config = yaml.safe_load(file) or {}
-
-            current_config['profiles'][profile_name] = self.profiles[profile_name].dict()
-
-            with open(config_path, 'w') as file:
-                yaml.safe_dump(current_config, file)
-
-            logging.info(f"Profile '{profile_name}' configuration saved to {config_path}")
-        except Exception as e:
-            logging.error(f"Failed to save profile '{profile_name}' configuration to {config_path}: {e}")
-            raise e
-        
-    @classmethod
-    def from_yaml(cls, file_path: str):
-        try:
-            with open(file_path, 'r') as file:
-                config_data = yaml.safe_load(file) or {}
-            
-            profiles = {}
-            for name, data in config_data.get('profiles', {}).items():
-                profiles[name] = Profile(**data)
-
-            if 'default' not in profiles:
-                profiles['default'] = Profile()
-
-            return cls(profiles=profiles)
-
-        except Exception as e:
-            logging.error(f"An error occurred while loading the configuration: {e}")
+            logging.error(f"Failed to save configuration to {config_path}: {e}")
             raise
 
+    def read_current_config(self) -> Dict[str, Any]:
+        config_path = self.get_config_file_path()
+        if config_path.exists():
+            with open(config_path, 'r') as file:
+                return yaml.safe_load(file) or {}
+        return {}
+
+    def save_profile_to_yaml(self, profile_name: str):
+        config_path = self.get_config_file_path()
+        current_config = self.read_current_config()
+        current_config['profiles'][profile_name] = self.profiles[profile_name].dict()
+        self.write_config_to_yaml(config_path, current_config)
+
+    @classmethod
+    def from_yaml(cls, file_path: str):
+        config_data = cls.load_config_data(file_path)
+        profiles = cls.extract_profiles_from_data(config_data)
+        return cls(profiles=profiles)
+
+    @staticmethod
+    def load_config_data(file_path: str) -> Dict[str, Any]:
+        try:
+            with open(file_path, 'r') as file:
+                return yaml.safe_load(file) or {}
+        except Exception as e:
+            logging.error(f"Error loading configuration from {file_path}: {e}")
+            raise
+
+    @staticmethod
+    def extract_profiles_from_data(config_data: Dict[str, Any]) -> Dict[str, Profile]:
+        profiles = {}
+        for name, data in config_data.get('profiles', {}).items():
+            profiles[name] = Profile(**data)
+        if 'default' not in profiles:
+            profiles['default'] = Profile()
+        return profiles
+
     def update_from_cli(self, profile: str, **cli_args):
-        """
-        Updates the configuration with values from CLI arguments.
-        If the profile does not exist, it is created with the provided arguments.
-        If the profile is 'default', changes are not saved to the YAML file.
-        """
-        if profile not in self.profiles:
-            self.profiles[profile] = Profile()
-
-        active_profile = self.profiles[profile]
-
-        for arg_name, arg_value in cli_args.items():
-            if arg_value is not None and hasattr(active_profile, arg_name):
-                setattr(active_profile, arg_name, arg_value)
-
+        self.create_or_update_profile(profile, **cli_args)
         if profile != 'default':
             self.save_to_yaml()
 
-    def get_config_file_path(self):
-        """Return the expected path of the configuration YAML file."""
+    def create_or_update_profile(self, profile: str, **cli_args):
+        if profile not in self.profiles:
+            self.profiles[profile] = Profile()
+        active_profile = self.profiles[profile]
+        self.set_profile_attributes(active_profile, cli_args)
+
+    @staticmethod
+    def set_profile_attributes(profile, cli_args):
+        for arg_name, arg_value in cli_args.items():
+            if arg_value is not None and hasattr(profile, arg_name):
+                setattr(profile, arg_name, arg_value)
+
+    def get_config_file_path(self) -> Path:
+        convector_root_dir = self.read_convector_root_dir()
+        return Path(convector_root_dir) / 'config.yaml'
+
+    def read_convector_root_dir(self) -> str:
         if PERSISTENT_CONFIG_PATH.exists():
             with open(PERSISTENT_CONFIG_PATH, 'r') as file:
-                convector_root_dir = file.read().strip()
+                return file.read().strip()
         else:
-            convector_root_dir = self.convector_root_dir
-
-        return Path(convector_root_dir) / 'config.yaml'
+            return self.convector_root_dir
