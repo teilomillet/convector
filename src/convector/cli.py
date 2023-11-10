@@ -161,17 +161,19 @@ def process(ctx, file_path: str,
 
     try:
         selected_profile_name = profile if profile else 'default'
-        selected_profile = config.profiles.get(selected_profile_name)
+        # Check if the profile exists, if not, initialize it
+        if profile not in config.profiles:
+            config.profiles[profile] = Profile()
 
-        if not selected_profile:
-            raise ConfigurationError(f"Profile '{selected_profile_name}' not found in configuration.")
+        selected_profile = config.profiles[profile]
 
+        # Now, since we've ensured the profile exists, we can update it with CLI args
         cli_args = {
             'is_conversation': is_conversation,
             'input': input,
             'output': output,
             'instruction': instruction,
-            'labels': labels.split(',') if labels else labels,
+            'labels': labels.split(',') if labels else None,
             'lines': lines,
             'bytes': bytes,
             'output_file': output_file,
@@ -182,15 +184,14 @@ def process(ctx, file_path: str,
             'output_schema': output_schema,
         }
 
-        for key, value in cli_args.items():
-            if value is not None: 
-                setattr(selected_profile, key, value)
+        # Use update_from_cli to set the profile attributes
+        config.update_from_cli(profile=selected_profile_name, **cli_args)
 
-        UserInteraction.show_message("Processing started.", "info")
-
+        # Save the updated profile
         if selected_profile_name != 'default':
             config.save_profile_to_yaml(selected_profile_name)
 
+        # Proceed with data processing
         process_conversational_data(Path(file_path), selected_profile)
 
     except ConfigurationError as e:
