@@ -39,7 +39,7 @@ class FileProcessing:
             logging.error(f"The file '{self.file_handler.file_path}' does not exist.")
             return False
         return True
-    
+  
     def display_results(self, output_file_path, lines_written, total_bytes_written):
         absolute_path = Path(output_file_path).resolve()
         print(f"\nDelivered to file://{absolute_path} \n({lines_written} lines, {total_bytes_written} bytes)")

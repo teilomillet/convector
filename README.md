@@ -1,59 +1,82 @@
-# Convector: Conversational Data Transformation Simplified
 
-Convector facilitates the standardization of conversational datasets, making conversational data preparation for NLP tasks efficient and straightforward.
+# Convector
+
+## Introduction
+**Convector** is a tool designed to facilitate the unification of conversational datasets into a consistent format. Capable of handling various dataset formats including JSONL, Parquet, Zstandard (Zst), JSON.GZ, CSV, and TXT, **Convector** converts them into JSONL format. The user can choose to filter data during transformation for enhanced customization. It offers flexibility in output formats with options like the default format and chat_completion format, the latter being compliant with OpenAI's format.
 
 ## Installation
+**Convector** can be installed either via PyPI or directly from GitHub.
 
-Install with pip:
-```bash
-pip install convector
-```
+- **Using PyPI**: Run `pip install convector` in the terminal.
+- **Using GitHub**: Clone and install using the following commands:
+  ```bash
+  git clone https://github.com/teilomillet/convector
+  cd convector
+  pip install .
+  ```
 
-Or install from source:
-```bash
-git clone https://github.com/teilomillet/convector && cd convector && pip install .
-```
+## Usage
+**Convector** provides a command-line interface for easy data processing with various customization options.
 
-## First Use
+- **Basic Command**: `convector process <file_path> [OPTIONS]`
+- **Options**:
+  - `-p, --profile`: Predefined profile from the config (default is 'default').
+  - `-c, --conversation`: Allow to process conversational exchanges.
+  - `--instruction`: Key for instructions or system messages.
+  - `-i, --input-key`: Key for user inputs.
+  - `-o, --output-key`: Key for bot responses.
+  - `-s, --schema`: Schema of the output data.
+  - `--filter`: Filter conditions in "field,operator,value" format.
+  - `-l, --limit`: Limit to a number of lines.
+  - `--bytes`: Limit to a number of bytes.
+  - `-f, --file-out`: File for transformed data.
+  - `-d, --dir-out`: Directory for output files.
+  - `-v, --verbose`: Enable detailed logs.
 
-Running Convector initiates `config.yaml` in your directory, storing your transformation profiles.
+- **Example Commands**: 
+  ```bash
+  convector process /path/to/data/
+  ```
+  - Will process each file in the folder.
 
-## Using Convector
+  ```bash
+  convector process /path/to/data.jsonl -c --filter id<10500 -f output.jsonl --dir-out /path/to/output_dir/
+  ```
+  - Will process the file `data.jsonl`, which is a conversation `-c`, keep all the data with an `id` under 10500, the output will be saved in `/path/to/output_dir/output.jsonl`.
 
-Transform data files with:
-```bash
-convector process <file_path> [OPTIONS]
-```
+  ```bash
+  convector process /path/to/data.parquet --filter user_id --schema chat_completion
+  ```
+  - Will process the file `data.parquet` and output the data into a `chat_completion` format with the `user_id` at each row. (the output data will be saved in `data_tr.jsonl` inside the default output location (convector/silo)).
 
-Use --help for more information and deep dive in the possibilities.
+  ```bash
+  convector process /path/to/data.parquet -p sampler -l 333 -s chat_completion -f sampler.jsonl
+  ```
+  - Will register a profile named `sampler`, process `333` lines of the file `data.parquet` and save the output into a `chat_completion` format in a file name `sampler.jsonl`.
 
-### Profiles
+  ```bash
+  convector process /path/to/data/ -p sampler
+  ```
+  - Will process all the files in the folder `/data`, using all the commands previously saved in the profile `sampler` (see above). 
 
-Use `-p` with a profile name to apply specific transformations. New or modified profiles auto-save to `config.yaml`.
+## Advanced Features
+- **Conversational Data Handling**: **Convector** efficiently processes nested conversational data. Using the '-c' command, it can identify and handle complex conversation structures, auto-generating a `conversation_id` when needed.
+- **Customization**: Users can customize the data fields to be retained during processing with the `--filter` option. By default, **Convector** keeps `instruction`, `input`, and `output`. Additional fields can be included as required.
+- **Folder Handling**: **Convector** can go through folders to process the data inside it. It will by default, create a file using `_tr` at the end if no `--file-out` is specified.
 
-### Default Schema
-
-Out-of-the-box schema structure:
-```json
-{"instruction":"", "input":"", "output":""}
-```
-
-### Examples
-
-Process nested data, assuming conversational format, to JSON:
-```bash
-convector process data.csv -c -f output.json
-```
-
-Automatically create/update a profile with additional columns you want to keep:
-```bash
-convector process data.csv -p new_profile --add-cols 'col1,col2'
-```
-
-## Capabilities
-
-- Standardize datasets for model training.
-- Convert varied data formats to a unified structure.
-- Automate data preparation processes.
-
-Convector serves as a practical tool for data format standardization, offering a suite of options for custom data transformation needs.
+## Configuration and Customization
+- **Profile Customization**: Users can define and use custom profiles for different types of data processing tasks inside the `config.yaml`. The profile will automatically be saved and updated if used with new commands.
+- **Schema Application**: **Convector** allows for the application of custom schemas to tailor the output according to specific requirements. 
+  - Default Schema:
+    ```json
+    {"instruction":"","input":"","output":"","source":"<filename>"}
+    ```
+  - Chat Completion Schema:
+    ```json
+    "messages": [
+        {"role": "system", "content": ""},
+        {"role": "user", "content": ""},
+        {"role": "assistant", "content": ""}
+    ],
+    "source":""
+    ```

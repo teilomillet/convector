@@ -118,7 +118,7 @@ def convector():
 @click.option('-i', '--input-key', 'input', help='Key for user inputs.')
 @click.option('-o', '--output-key', 'output', help='Key for bot responses.')
 @click.option('-s', '--schema', 'output_schema', default=None, help='Schema for output data.')
-@click.option('--filter', 'filters', help='Filter conditions in the format "field,operator,value". Can be used multiple times.')
+@click.option('--filter', 'filters', help='Filter conditions in the format "field,operator,value".')
 @click.option('-l', '--limit', 'lines', type=int, help='Limit processing to this number of lines.')
 @click.option('--bytes', type=int, help='Limit processing to this number of bytes.')
 @click.option('-f', '--file-out', 'output_file', type=click.Path(), help='File to write the transformed data to.')
