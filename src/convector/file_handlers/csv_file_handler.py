@@ -2,22 +2,32 @@
 
 import csv
 import logging
-from typing import Generator, Dict, Any, Iterator
+from typing import Generator, Dict, Any
 from convector.core.base_file_handler import BaseFileHandler
 
 class CSVFileHandler(BaseFileHandler):
-    def read_file(self) -> Iterator:
-        """
-        Generator that reads a CSV file and yields each row as a dictionary.
-        """
-        with open(self.file_path, newline='', encoding='utf-8') as csvfile:
-            reader = csv.DictReader(csvfile)
-            for row in reader:
-                yield row
+    """
+    CSVFileHandler is responsible for reading, processing, and yielding transformed 
+    rows from a .csv file. It extends BaseFileHandler and utilizes the configuration 
+    provided by ConvectorConfig.
+    """
 
-    def transform_data(self, original_data):
+    def read_file(self) -> Generator:
         """
-        Transforms a row from the CSV file and processes it using handle_data.
+        Generator that reads a CSV file row by row.
+        """
+        try:
+            with open(self.file_path, 'r', encoding='utf-8') as file:
+                reader = csv.DictReader(file)
+                for row in reader:
+                    yield row
+        except Exception as e:
+            logging.error(f"Failed to read the CSV file at {self.file_path}: {e}")
+            raise
+
+    def transform_data(self, original_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Transforms a row of CSV file into the desired format and then processes it using handle_data.
         """
         # Process data using handle_data from BaseFileHandler
         processed_data = super().handle_data(original_data)
@@ -27,9 +37,8 @@ class CSVFileHandler(BaseFileHandler):
     def handle_file(self) -> Generator[Dict[str, Any], None, None]:
         """
         Processes a CSV file according to the active profile settings and yields 
-        transformed rows.
+        transformed data objects.
         """
-        logging.debug(f"Handling CSV file with profile: {self.profile}")
         try:
             for transformed_item in super().handle_file():
                 if transformed_item is not None:

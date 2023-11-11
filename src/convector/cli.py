@@ -1,22 +1,19 @@
 import click
 import yaml
 import logging
-import shutil
-import json
 import re
 import logging.config
-from pydantic import BaseModel, Field
 from pathlib import Path
-from typing import Any, Optional, Union, Tuple, List
-from tempfile import NamedTemporaryFile
+from typing import Optional, List
 
 
-from .core.directory_processor import DirectoryProcessor
+
+from convector.core.directory_processor import DirectoryProcessor
 from convector.core.profile import Profile, FilterCondition
 from convector.core.convector_config import ConvectorConfig
-from .core.user_interaction import UserInteraction
+from convector.core.user_interaction import UserInteraction
 from .convector import Convector
-from .core.file_handler_factory import FileHandlerFactory
+
 
 PERSISTENT_CONFIG_PATH = Path.home() / '.convector_config'
 
@@ -57,7 +54,6 @@ class DirectoryProcessorFactory:
     @staticmethod
     def create_from_profile(profile, file_path):
         try:
-            logging.debug(f'profile as dict: {profile.dict()}')
             is_conversation = profile.is_conversation
 
             return DirectoryProcessor(
@@ -73,7 +69,6 @@ def echo_info(message: str) -> None:
 
 def process_conversational_data(file_path: Path, profile: Profile) -> None:
     if file_path.is_dir():
-        echo_info("Directory processing mode selected.")
         directory_processor = DirectoryProcessorFactory.create_from_profile(profile, file_path)
         directory_processor.process_directory()
         directory_processor.print_summary()

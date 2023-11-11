@@ -36,7 +36,6 @@ class ParquetFileHandler(BaseFileHandler):
         Processes a Parquet file according to the active profile settings and yields 
         transformed data objects.
         """
-        logging.debug(f"Handling Parquet file with profile: {self.profile}")
         try:
             for transformed_item in super().handle_file():
                 if transformed_item is not None:

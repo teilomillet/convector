@@ -20,8 +20,6 @@ class ConvectorConfig(BaseSettings):
 
     def retrieve_profile(self, profile_name: str) -> Profile:
         """Retrieve a specific profile by name, returning a default Profile instance if not found"""
-        logging.debug(f"Current profiles: {self.profiles}")
-        logging.debug(f"Default profile key: {self.default_profile}")
         profile = self.profiles.get(profile_name, Profile())
         self.validate_profile_instance(profile)
         return profile
@@ -52,7 +50,6 @@ class ConvectorConfig(BaseSettings):
         try:
             with open(config_path, 'w') as file:
                 yaml.safe_dump(config_data, file)
-            logging.info(f"Configuration saved to {config_path}")
         except Exception as e:
             logging.error(f"Failed to save configuration to {config_path}: {e}")
             raise

@@ -31,8 +31,7 @@ class FileProcessing:
         output_file_path.parent.mkdir(parents=True, exist_ok=True)
 
         absolute_path = output_file_path.resolve()
-        logging.info(f"Output will be saved to: {absolute_path}")
-        print(f"Output will be saved to: {absolute_path}")
+        print(f"\nOutput will be saved to: {absolute_path}\n")
         return output_file_path
 
     def validate_input_file(self):
@@ -42,7 +41,6 @@ class FileProcessing:
         return True
     
     def display_results(self, output_file_path, lines_written, total_bytes_written):
-        print("Displaying results...")  # Debug
         absolute_path = Path(output_file_path).resolve()
         print(f"\nDelivered to file://{absolute_path} \n({lines_written} lines, {total_bytes_written} bytes)")
 
@@ -53,9 +51,7 @@ class DataTransformer:
         self.file_handler = file_handler
 
     def transform_item(self, item):
-        logging.debug(f"Transforming item: {item}")
         processed_item = self.file_handler.transform_data(item)
-        logging.debug(f"Processed item: {processed_item}")
 
         if not processed_item or not any(processed_item):  # Check if filtered_items is empty or contains empty dicts
             return []  # Return empty list if no items to process
@@ -68,7 +64,6 @@ class DataTransformer:
                 transformed_item = item
             transformed_items.append(transformed_item)
 
-        logging.debug(f"transformed_items: {transformed_items}")
         return transformed_items
 
 class FileWriter:
@@ -81,7 +76,6 @@ class FileWriter:
     def write_item(self, item):
         item_with_source = item.copy()  # Copy the item
         item_with_source['source'] = self.source  # Add the 'source' field
-        logging.debug(f"Writing item to file: {item_with_source}")
         self.buffer.append(json.dumps(item_with_source, ensure_ascii=False) + '\n')
         if len(self.buffer) >= 100:
             self.flush()
@@ -110,12 +104,10 @@ class DataSaver:
 
         with managed_progress_bar(total_lines or 0) as progress_bar:
             for items in transformed_data_generator:
-                logging.debug(f"Items from generator: {items}")
                 # Check if items is a list and iterate through each item if so
                 if isinstance(items, list):
                     for item in items:
                         transformed_item = self.data_transformer.transform_item(item)
-                        logging.debug(f"Transformed item to be written: {transformed_item}")
 
                         if isinstance(transformed_item, dict):
                             self.file_writer.write_item(transformed_item)
@@ -130,7 +122,6 @@ class DataSaver:
                             break
                 else:
                     transformed_item = self.data_transformer.transform_item(items)
-                    logging.debug(f"Single transformed item to be written: {transformed_item}")
 
                     self.file_writer.write_item(transformed_item)
 
@@ -161,7 +152,6 @@ class ProcessingOrchestrator:
         if not self.file_handler_module.validate_input_file():
             return
 
-        logging.info("Starting processing...")
         output_file_path = self.file_handler_module.get_output_file_path()
 
         # Correctly initialize the DataTransformer with the file handler and output schema handler
@@ -182,7 +172,6 @@ class ProcessingOrchestrator:
             append=self.profile.append
         )
         
-        logging.info("Data processing and saving complete.")
 
 class Convector:
     """

@@ -4,14 +4,11 @@ import json
 from abc import ABC, abstractmethod
 from typing import Generator, Dict, Any, Iterator
 import logging
-import re
-import dateutil.parser
 
 from ..data_processors.data_processors import IDataProcessor, ConversationDataProcessor, CustomKeysDataProcessor, AutoDetectDataProcessor
-from ..utils.random_selector import IRandomSelector, LineRandomSelector, ByteRandomSelector, ConversationRandomSelector
-from convector.core.convector_config import ConvectorConfig
+from ..utils.random_selector import LineRandomSelector, ByteRandomSelector, ConversationRandomSelector
 from convector.core.profile import Profile
-from convector.utils.label_filter import LabelFilter, Condition
+from convector.utils.label_filter import LabelFilter
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -34,16 +31,13 @@ class BaseFileHandler(ABC):
         self.bytes = profile.bytes
         self.random_selection = profile.random
         self.data_processor: IDataProcessor = None
-
-        logging.debug(f"BaseFileHandler initialized with is_conversation: {profile.is_conversation}")
-        
+       
 
     def filter_lines(self, lines: Iterator) -> Iterator:
         """
         Filters lines based on random selection or line limits.
         """
         selected_positions = self.determine_selected_positions(lines)
-        logging.debug(f"Selected positions: {selected_positions}")
         for i, line in enumerate(lines):
             if self.is_selected_line(i, selected_positions):
                 yield line
@@ -104,15 +98,10 @@ class BaseFileHandler(ABC):
         label_filter = LabelFilter(self.filters)  # Initialize the LabelFilter with filters from profile
 
         for line in filtered_lines:
-            logging.debug(f"Original line: {line}")
             processed_line = json.loads(line) if isinstance(line, str) else line  # Check if line is a string
-            logging.debug(f"Processed line: {processed_line}")
 
             filtered_batch = label_filter.apply_filters([processed_line])
-            logging.debug(f"Filtered batch: {filtered_batch}")
-
             for filtered_line in filtered_batch:
-                logging.debug(f"Filtered line: {filtered_line}")
                 yield self.process_single_line(json.dumps(filtered_line) if isinstance(filtered_line, dict) else filtered_line, total_bytes)
 
 
@@ -128,7 +117,6 @@ class BaseFileHandler(ABC):
             return None
 
         total_bytes += line_bytes
-        logging.debug(f"Transformed line: {transformed_item}")
         return transformed_item
 
     def random_selector(self, *args, **kwargs) -> Any:
@@ -148,7 +136,6 @@ class BaseFileHandler(ABC):
             return self.random_selector_strategy.select(*args, **kwargs)
 
     def handle_data(self, data):
-        logging.debug(f"Before handle_data : {data}")
         fields_to_include = [condition.field for condition in self.filters]
         # Process data that meets the criteria
         self.choose_data_processor()

@@ -30,7 +30,6 @@ class ConversationDataProcessor(IDataProcessor):
             logging.warning(f"No data transformed in ConversationDataProcessor for: {data}")
             return []
 
-        logging.debug(f"Processed data in ConversationDataProcessor: {transformed_data}")
         # Include specified fields if present
         for item in transformed_data:
             for field in fields_to_include:

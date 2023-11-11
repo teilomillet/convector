@@ -35,7 +35,6 @@ class JSONLFileHandler(BaseFileHandler):
         Processes a JSONL file according to the active profile settings and yields 
         transformed JSON objects.
         """
-        logging.debug(f"Handling JSONL file with profile: {self.profile}")
         try:
             for transformed_item in super().handle_file():
                 if transformed_item is not None:

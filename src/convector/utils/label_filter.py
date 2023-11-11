@@ -15,8 +15,6 @@ class Condition:
         self.value = self.cast_value(value)
         self.is_inclusion = operator is None and value is None
 
-        logging.debug(f"Initializing Condition: field={field}, operator={operator}, value={value}, is_inclusion={self.is_inclusion}")
-
     @staticmethod
     def cast_value(value: str) -> Any:
         """
@@ -113,23 +111,18 @@ class LabelFilter:
         self.conditions = [Condition.convert_to_condition(fc) for fc in filter_conditions]
 
     def apply_filters(self, data_batch: List[Dict]) -> List[Dict]:
-        # logging.debug(f"Applying filters to data batch: {data_batch}")
         all_inclusions = all(condition.is_inclusion for condition in self.conditions)
-        logging.debug(f"All conditions are field inclusions: {all_inclusions}")
 
         if all_inclusions:
             included_data = [self.include_fields(item) for item in data_batch]
-            # logging.debug(f"Included data (all inclusions): {included_data}")
             return included_data
 
         filtered_data = []
         for item in data_batch:
             matches = self.matches_all_conditions(item)
-            # logging.debug(f"Item matches all conditions: {matches} | Item: {item}")
             if matches:
                 item = self.include_fields(item)
                 filtered_data.append(item)
-        # logging.debug(f"Filtered data (with conditions applied): {filtered_data}")
         return filtered_data
 
     def include_fields(self, item: Dict) -> Dict:
