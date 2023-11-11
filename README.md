@@ -52,7 +52,7 @@
   ---------------------------------------
   - Register a profile name `sampler`, process `333` lines of the file `data.parquet` and save the output into a `chat_completion` format in a file name `sampler.jsonl`:
     ```bash
-    convector process /data.parquet -p sampler -l 333 -s chat_completion -f sampler.jsonl
+    convector process /data.json -p sampler -l 333 -s chat_completion -f sampler.jsonl
     ```
   ---------------------------------------
   - Process all the files in the folder `/data`, using all the commands previously saved in the profile `sampler` (see above):
@@ -62,7 +62,7 @@
   ---------------------------------------
 
 ## Advanced Features
-- **Conversational Data Handling**: **Convector** efficiently processes nested conversational data. Using the '-c' command, it can identify and handle complex conversation structures, auto-generating a `conversation_id` when needed.
+- **Conversational Data Handling**: **Convector** efficiently processes nested conversational data. Using the `-c` command, it can identify and handle complex conversation structures, auto-generating a `conversation_id` when needed.
 - **Customization**: Users can customize the data fields to be retained during processing with the `--filter` option. By default, **Convector** keeps `instruction`, `input`, and `output`. Additional fields can be included as required.
 - **Folder Handling**: **Convector** can go through folders to process the data inside it. It will by default, create a file using `_tr` at the end if no `--file-out` is specified.
 
