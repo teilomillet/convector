@@ -10,6 +10,7 @@ class IDataProcessor:
 
 class ConversationDataProcessor(IDataProcessor):
     def process(self, data: Dict[str, Any], **kwargs) -> List[Dict[str, Any]]:
+        fields_to_include = kwargs.get('fields_to_include', [])
         transformed_data = []
 
         # Generate a conversation ID once per conversation
@@ -30,6 +31,12 @@ class ConversationDataProcessor(IDataProcessor):
             return []
 
         logging.debug(f"Processed data in ConversationDataProcessor: {transformed_data}")
+        # Include specified fields if present
+        for item in transformed_data:
+            for field in fields_to_include:
+                if field in data:
+                    item[field] = data[field]
+
         return transformed_data
 
     def extract_conversation_piece(self, conversation_data, index, conversation_id):
@@ -56,15 +63,15 @@ class ConversationDataProcessor(IDataProcessor):
             return output_schema_handler.apply_schema(conversation_piece)
         return conversation_piece
 
-
 class CustomKeysDataProcessor(IDataProcessor):
     def process(self, data: Dict[str, Any], **kwargs) -> List[Dict[str, Any]]:
+        fields_to_include = kwargs.get('fields_to_include', [])
         input_key = kwargs.get('input')
         output_key = kwargs.get('output')
         instruction_key = kwargs.get('instruction')
         
         if not (input_key and output_key) or input_key not in data or output_key not in data:
-            logging.error(f"The necessary keys are missing or do not match the data structure. Data keys: {list(data.keys())}")
+            logging.error("The necessary keys are missing or do not match the data structure.")
             raise ValueError("The necessary keys are missing or do not match the data structure.")
         
         transformed_data = {
@@ -73,8 +80,12 @@ class CustomKeysDataProcessor(IDataProcessor):
             "output": data.get(output_key, "")
         }
 
-        return [transformed_data]
+        # Include specified fields if present
+        for field in fields_to_include:
+            if field in data:
+                transformed_data[field] = data[field]
 
+        return [transformed_data]
 
 class AutoDetectDataProcessor(IDataProcessor):
     def __init__(self):
@@ -86,21 +97,25 @@ class AutoDetectDataProcessor(IDataProcessor):
         self.detected_schema = {}
 
     def process(self, data: Dict[str, Any], **kwargs) -> List[Dict[str, Any]]:
-        # Detect schema based on the data
+        fields_to_include = kwargs.get('fields_to_include', [])
         self.detect_schema(data)
 
-        # Check if the necessary keys are found
         if not all(key in self.detected_schema for key in ['instruction', 'input', 'output']):
-            logging.error(f"Required keys not detected in data: {data.keys()}")
+            logging.error("Required keys not detected in data.")
             return []
 
-        transformed_data = [{
+        transformed_data = {
             "instruction": data.get(self.detected_schema.get("instruction", ""), ""),
             "input": data.get(self.detected_schema.get("input", ""), ""),
             "output": data.get(self.detected_schema.get("output", ""), "")
-        }]
+        }
 
-        return transformed_data
+        # Include specified fields if present
+        for field in fields_to_include:
+            if field in data:
+                transformed_data[field] = data[field]
+
+        return [transformed_data]
 
     def detect_schema(self, data: Dict[str, Any]):
         # Reset detected schema
