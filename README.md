@@ -62,7 +62,7 @@
   ---------------------------------------
 
 ## Advanced Features
-- **Conversational Data Handling**: **Convector** efficiently processes nested conversational data. Using the `-c` command, it can identify and handle complex conversation structures, auto-generating a `conversation_id` when needed.
+- **Conversational Data Handling**: **Convector** efficiently processes nested conversational data. Using the `-c, --conversation` command, it can identify and handle complex conversation structures, auto-generating a `conversation_id` when needed.
 - **Customization**: Users can customize the data fields to be retained during processing with the `--filter` option. By default, **Convector** keeps `instruction`, `input`, and `output`. Additional fields can be included as required.
 - **Folder Handling**: **Convector** can go through folders to process the data inside it. It will by default, create a file using `_tr` at the end if no `--file-out` is specified.
 
