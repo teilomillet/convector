@@ -12,14 +12,17 @@ class ConversationDataProcessor(IDataProcessor):
     def process(self, data: Dict[str, Any], **kwargs) -> List[Dict[str, Any]]:
         transformed_data = []
 
-        # Check if 'data' contains nested conversation data
+        # Generate a conversation ID once per conversation
+        conversation_id = data.get('conversation_id', uuid.uuid4().hex[:5])
+
         if 'data' in data:
             conversation_data = data.get('data', [])
-            # Process each conversation pair
             for i in range(0, len(conversation_data), 2):
-                transformed_data.extend(self.extract_conversation_piece(conversation_data, i, data.get('conversation_id')))
+                # Use the same conversation_id for each pair
+                transformed_data.extend(self.extract_conversation_piece(conversation_data, i, conversation_id))
         else:
-            # If 'data' is already an individual conversation piece
+            # For individual conversation pieces, use the generated conversation_id
+            data['conversation_id'] = conversation_id
             transformed_data.append(data)
 
         if not transformed_data:

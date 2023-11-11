@@ -57,7 +57,6 @@ class DataTransformer:
         processed_item = self.file_handler.transform_data(item)
         logging.debug(f"Processed item: {processed_item}")
 
-
         if not processed_item or not any(processed_item):  # Check if filtered_items is empty or contains empty dicts
             return []  # Return empty list if no items to process
 

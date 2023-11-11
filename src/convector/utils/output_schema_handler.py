@@ -61,6 +61,10 @@ class OutputSchemaHandler:
                 "output": item.get("output", "")
             }
 
+            # Include conversation_id if present
+            if 'conversation_id' in item:
+                transformed_item['conversation_id'] = item['conversation_id']
+
             # Add additional fields specified in filters
             if self.fields_to_include:
                 for field in self.fields_to_include:
@@ -81,6 +85,10 @@ class OutputSchemaHandler:
                     {"role": "assistant", "content": item.get("output", "")} if item.get("output") else None
                 ]
             }
+
+            # Include conversation_id if present
+            if 'conversation_id' in item:
+                chat_completion['conversation_id'] = item['conversation_id']
 
             # Add additional fields specified in filters
             if self.fields_to_include:
