@@ -1,7 +1,0 @@
-class ConfigurationError(Exception):
-    """Exception raised for errors in the configuration."""
-    pass
-
-class ProcessingError(Exception):
-    """Exception raised during processing of the conversational data."""
-    pass
