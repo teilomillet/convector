@@ -38,22 +38,22 @@
     ```bash
     convector process /path/to/data/
     ```
-
+  ---------------------------------------
   - Process the file `data.jsonl`, which is a conversation `-c`, keep all the data with an `id` under 10500, the output will be saved in `/path/to/output_dir/output.jsonl`:
     ```bash
     convector process /data.jsonl -c --filter id<10500 -f output.jsonl -d /output_dir/
     ```
-
+  ---------------------------------------
   - Process the file `data.parquet` and output the data into a `chat_completion` format with the `user_id` at each row. (the output data will be saved in `data_tr.jsonl` inside the default output location (convector/silo)):
     ```bash
     convector process /data.parquet --filter user_id --schema chat_completion
     ```
-
+  ---------------------------------------
   - Register a profile name `sampler`, process `333` lines of the file `data.parquet` and save the output into a `chat_completion` format in a file name `sampler.jsonl`:
     ```bash
     convector process /data.parquet -p sampler -l 333 -s chat_completion -f sampler.jsonl
     ```
-
+  ---------------------------------------
   - Process all the files in the folder `/data`, using all the commands previously saved in the profile `sampler` (see above):
     ```bash
     convector process /data/ -p sampler
