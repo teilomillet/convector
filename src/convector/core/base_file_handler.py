@@ -104,16 +104,16 @@ class BaseFileHandler(ABC):
         label_filter = LabelFilter(self.filters)  # Initialize the LabelFilter with filters from profile
 
         for line in filtered_lines:
-            # logging.debug(f"Original line: {line}")
-            processed_line = json.loads(line)
-            # logging.debug(f"Processed line (JSON): {processed_line}")
+            logging.debug(f"Original line: {line}")
+            processed_line = json.loads(line) if isinstance(line, str) else line  # Check if line is a string
+            logging.debug(f"Processed line: {processed_line}")
 
             filtered_batch = label_filter.apply_filters([processed_line])
-            # logging.debug(f"Filtered batch: {filtered_batch}")
+            logging.debug(f"Filtered batch: {filtered_batch}")
 
             for filtered_line in filtered_batch:
                 logging.debug(f"Filtered line: {filtered_line}")
-                yield self.process_single_line(json.dumps(filtered_line), total_bytes)
+                yield self.process_single_line(json.dumps(filtered_line) if isinstance(filtered_line, dict) else filtered_line, total_bytes)
 
 
     def process_single_line(self, line: str, total_bytes: int) -> Dict[str, Any]:

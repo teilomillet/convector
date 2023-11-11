@@ -2,6 +2,7 @@
 
 import pandas as pd
 import logging
+import json
 from typing import Generator, Dict, Any, Iterator
 from convector.core.base_file_handler import BaseFileHandler
 
@@ -23,6 +24,8 @@ class ParquetFileHandler(BaseFileHandler):
         """
         Transforms a row of Parquet file into the desired format and then processes it using handle_data.
         """
+        if isinstance(original_data, str):
+            original_data = json.loads(original_data)
         # Process data using handle_data from BaseFileHandler
         processed_data = super().handle_data(original_data)
         # Apply filters and schema here if needed before returning
