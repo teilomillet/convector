@@ -72,13 +72,38 @@ class DataTransformer:
         logging.debug(f"transformed_items: {transformed_items}")
         return transformed_items
 
+class FileWriter:
+    def __init__(self, output_file_path, mode='a', source=None):
+        self.output_file_path = output_file_path
+        self.mode = mode
+        self.source = source  # The source file name
+        self.buffer = []
+
+    def write_item(self, item):
+        item_with_source = item.copy()  # Copy the item
+        item_with_source['source'] = self.source  # Add the 'source' field
+        logging.debug(f"Writing item to file: {item_with_source}")
+        self.buffer.append(json.dumps(item_with_source, ensure_ascii=False) + '\n')
+        if len(self.buffer) >= 100:
+            self.flush()
+
+    def flush(self):
+        with open(self.output_file_path, self.mode, encoding='utf-8') as file:
+            file.writelines(self.buffer)
+            self.mode = 'a'  # After the first write, always append
+        self.buffer.clear()
+
+    def close(self):
+        if self.buffer:
+            self.flush()
    
 class DataSaver:
     def __init__(self, profile, output_file_path, data_transformer):
         self.profile = profile
         self.output_file_path = output_file_path
         self.data_transformer = data_transformer
-        self.file_writer = FileWriter(output_file_path)
+        source_file_name = Path(self.data_transformer.file_handler.file_path).name 
+        self.file_writer = FileWriter(output_file_path, source=source_file_name)
 
     def save_data(self, transformed_data_generator, total_lines, bytes, append):
         lines_written = 0
@@ -118,29 +143,6 @@ class DataSaver:
         
         self.file_writer.close() # Ensure the buffer is flushed at the end
     
-class FileWriter:
-    def __init__(self, output_file_path, mode='a'):
-        self.output_file_path = output_file_path
-        self.mode = mode
-        self.buffer = []
-
-    def write_item(self, item):
-        # Log the item being written to the file
-        logging.debug(f"Writing item to file: {item}")
-        self.buffer.append(json.dumps(item, ensure_ascii=False) + '\n')
-        if len(self.buffer) >= 100:
-            self.flush()
-
-    def flush(self):
-        with open(self.output_file_path, self.mode, encoding='utf-8') as file:
-            file.writelines(self.buffer)
-            self.mode = 'a'  # After the first write, always append
-        self.buffer.clear()
-
-    def close(self):
-        if self.buffer:
-            self.flush()
-
 @contextmanager
 def managed_progress_bar(total_lines):
     progress_bar = tqdm(total=total_lines, unit=" lines", position=0, desc="Processing", leave=True)

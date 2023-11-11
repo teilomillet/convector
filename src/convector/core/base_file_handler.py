@@ -11,7 +11,7 @@ from ..data_processors.data_processors import IDataProcessor, ConversationDataPr
 from ..utils.random_selector import IRandomSelector, LineRandomSelector, ByteRandomSelector, ConversationRandomSelector
 from convector.core.convector_config import ConvectorConfig
 from convector.core.profile import Profile
-from convector.utils.label_filter import LabelFilter
+from convector.utils.label_filter import LabelFilter, Condition
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -36,12 +36,14 @@ class BaseFileHandler(ABC):
         self.data_processor: IDataProcessor = None
 
         logging.debug(f"BaseFileHandler initialized with is_conversation: {profile.is_conversation}")
+        
 
     def filter_lines(self, lines: Iterator) -> Iterator:
         """
         Filters lines based on random selection or line limits.
         """
         selected_positions = self.determine_selected_positions(lines)
+        logging.debug(f"Selected positions: {selected_positions}")
         for i, line in enumerate(lines):
             if self.is_selected_line(i, selected_positions):
                 yield line
@@ -97,13 +99,22 @@ class BaseFileHandler(ABC):
             raise
 
     def process_lines(self) -> Generator[Dict[str, Any], None, None]:
-        """
-        Processes lines of the file based on the specified criteria.
-        """
         total_bytes = 0
         filtered_lines = self.filter_lines(self.read_file())
+        label_filter = LabelFilter(self.filters)  # Initialize the LabelFilter with filters from profile
+
         for line in filtered_lines:
-            yield self.process_single_line(line, total_bytes)
+            # logging.debug(f"Original line: {line}")
+            processed_line = json.loads(line)
+            # logging.debug(f"Processed line (JSON): {processed_line}")
+
+            filtered_batch = label_filter.apply_filters([processed_line])
+            # logging.debug(f"Filtered batch: {filtered_batch}")
+
+            for filtered_line in filtered_batch:
+                logging.debug(f"Filtered line: {filtered_line}")
+                yield self.process_single_line(json.dumps(filtered_line), total_bytes)
+
 
     def process_single_line(self, line: str, total_bytes: int) -> Dict[str, Any]:
         """
@@ -117,6 +128,7 @@ class BaseFileHandler(ABC):
             return None
 
         total_bytes += line_bytes
+        logging.debug(f"Transformed line: {transformed_item}")
         return transformed_item
 
     def random_selector(self, *args, **kwargs) -> Any:
@@ -135,28 +147,9 @@ class BaseFileHandler(ABC):
         if self.random_selector_strategy:
             return self.random_selector_strategy.select(*args, **kwargs)
 
-    def is_conversational_data(self, data):
-        messages = data.get('data', [])
-        if not isinstance(messages, list) or len(messages) % 2 != 0:
-            return False
-
-        return self.is_conversational_structure(messages[:10])  
-    
-    def is_conversational_structure(self, sample_data):
-        for i in range(0, len(sample_data), 2):
-            if not self.is_valid_message_pair(sample_data[i], sample_data[i+1]):
-                return False
-        return True
-
-    def is_valid_message_pair(self, user_message, assistant_message):
-        if not user_message or not assistant_message:
-            return False
-
-        user_keywords = re.findall(r"\b(what|how|can you)\b", user_message, re.IGNORECASE)
-        assistant_keywords = re.findall(r"\b(did|will|understand)\b", assistant_message, re.IGNORECASE)
-        return bool(user_keywords) and bool(assistant_keywords)
-
     def handle_data(self, data):
+        logging.debug(f"Before handle_data : {data}")
+
         # Process data that meets the criteria
         self.choose_data_processor()
         return self.data_processor.process(data,input=self.input, output=self.output, instruction=self.instruction)

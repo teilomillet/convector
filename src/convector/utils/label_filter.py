@@ -1,6 +1,8 @@
 import re
 from typing import List, Dict, Any
 import logging
+from convector.core.profile import FilterCondition
+
 
 class Condition:
     """
@@ -11,13 +13,19 @@ class Condition:
         self.field = field.split('.')
         self.operator = operator
         self.value = self.cast_value(value)
+        self.is_inclusion = operator is None and value is None
+
+        logging.debug(f"Initializing Condition: field={field}, operator={operator}, value={value}, is_inclusion={self.is_inclusion}")
 
     @staticmethod
     def cast_value(value: str) -> Any:
         """
         Attempts to cast the value to an int or float.
-        If casting fails, the value is returned as a string.
+        If casting fails or value is None, the value is returned as is.
         """
+        if value is None:
+            return value
+
         try:
             return int(value)
         except ValueError:
@@ -36,20 +44,17 @@ class Condition:
         return item if item != {} else None
 
     def matches(self, item: Dict) -> bool:
-        """
-        Checks if the item matches this condition.
-        """
-        # Special case for filter with only field specified
-        if self.operator is None and self.value in [None, '']:
-            return self.field_exists_in_item(item, self.field)
-        else:
-            item_value = self.get_nested_value(item, self.field)
-            if item_value is None:
-                logging.error(f"Field not found in item: {self.field}")
+        if self.is_inclusion:
+            # For field inclusion, always return True
+            return True
 
-                return False
-            item_value = self.cast_value(str(item_value))
-            return self.compare_values(item_value, self.value)
+        item_value = self.get_nested_value(item, self.field)
+        if item_value is None:
+            logging.error(f"Field not found in item: {self.field}")
+            return False
+
+        item_value = self.cast_value(str(item_value))
+        return self.compare_values(item_value, self.value)
 
     def field_exists_in_item(self, item: Dict, fields: List[str]) -> bool:
         """
@@ -95,38 +100,47 @@ class Condition:
 
         field, operator, value = match.groups()
         return Condition(field, operator, value)
+    
+    @staticmethod
+    def convert_to_condition(filter_condition: FilterCondition) -> 'Condition':
+        field = filter_condition.field
+        operator = filter_condition.operator if filter_condition.operator else None
+        value = filter_condition.value if filter_condition.value else None
+        return Condition(field, operator, value)
 
 class LabelFilter:
-    """
-    This class handles the filtering of data based on a list of conditions.
-    """
-    def __init__(self, specifications: List[str]):
-        self.conditions = [Condition.parse(spec) for spec in specifications]
+    def __init__(self, filter_conditions: List[Condition]):
+        self.conditions = [Condition.convert_to_condition(fc) for fc in filter_conditions]
 
-    def filter_data(self, data_batch: List[Dict]) -> List[Dict]:
+    def apply_filters(self, data_batch: List[Dict]) -> List[Dict]:
+        # logging.debug(f"Applying filters to data batch: {data_batch}")
+        all_inclusions = all(condition.is_inclusion for condition in self.conditions)
+        logging.debug(f"All conditions are field inclusions: {all_inclusions}")
+
+        if all_inclusions:
+            included_data = [self.include_fields(item) for item in data_batch]
+            # logging.debug(f"Included data (all inclusions): {included_data}")
+            return included_data
+
+        filtered_data = []
+        for item in data_batch:
+            matches = self.matches_all_conditions(item)
+            # logging.debug(f"Item matches all conditions: {matches} | Item: {item}")
+            if matches:
+                item = self.include_fields(item)
+                filtered_data.append(item)
+        # logging.debug(f"Filtered data (with conditions applied): {filtered_data}")
+        return filtered_data
+
+    def include_fields(self, item: Dict) -> Dict:
         """
-        Filters a batch of data items based on the defined conditions.
+        Ensures specified fields are included in the item.
         """
-        return [self.reduce_item(item) for item in data_batch if self.matches_all_conditions(item)]
+        inclusion_fields = {field: item.get(field) for condition in self.conditions if condition.is_inclusion for field in condition.field}
+        return {**item, **inclusion_fields}  # Merge included fields with existing item
 
     def matches_all_conditions(self, item: Dict) -> bool:
-        """
-        Checks if an item satisfies all the conditions.
-        """
-        return all(condition.matches(item) for condition in self.conditions)
-
-    def reduce_item(self, item: Dict) -> Dict:
-        """
-        Reduces an item to only the fields that are specified in the conditions.
-        """
-        reduced_item = {}
-        for condition in self.conditions:
-            if condition.operator is None:
-                field_value = condition.get_nested_value(item, condition.field)
-                if field_value is not None:
-                    reduced_item[".".join(condition.field)] = field_value
-        return reduced_item if reduced_item else item
-
-# Usage Example:
-# filter = LabelFilter(["user_id>50", "conversation_id", "source=source1", "metadata.age<50", "metadata.temp <=> 1,3"])
-# filtered_data = filter.filter_data(data_batch)
+        filter_conditions = [cond for cond in self.conditions if not cond.is_inclusion]
+        if not filter_conditions:
+            return True  # If there are no filter conditions, all items match
+        return all(condition.matches(item) for condition in filter_conditions)
