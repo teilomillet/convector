@@ -34,6 +34,7 @@
   - `-v, --verbose`: Enable detailed logs.
 
 - **Example Commands**: 
+  ---------------------------------------
   - Process each file in a folder:
     ```bash
     convector process /path/to/data/
@@ -58,6 +59,7 @@
     ```bash
     convector process /data/ -p sampler
     ```
+  ---------------------------------------
 
 ## Advanced Features
 - **Conversational Data Handling**: **Convector** efficiently processes nested conversational data. Using the '-c' command, it can identify and handle complex conversation structures, auto-generating a `conversation_id` when needed.
@@ -69,7 +71,7 @@
 - **Schema Application**: **Convector** allows for the application of custom schemas to tailor the output according to specific requirements. 
   - Default Schema:
     ```json
-    {"instruction":"","input":"","output":"","source":"<filename>"}
+    {"instruction":"","input":"","output":"","source":""}
     ```
   - Chat Completion Schema:
     ```json
