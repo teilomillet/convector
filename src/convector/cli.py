@@ -3,15 +3,16 @@ import yaml
 import logging
 import shutil
 import json
+import re
 import logging.config
 from pydantic import BaseModel, Field
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, Tuple, List
 from tempfile import NamedTemporaryFile
 
 
 from .core.directory_processor import DirectoryProcessor
-from convector.core.profile import Profile
+from convector.core.profile import Profile, FilterCondition
 from convector.core.convector_config import ConvectorConfig
 from .core.user_interaction import UserInteraction
 from .convector import Convector
@@ -82,6 +83,18 @@ def process_conversational_data(file_path: Path, profile: Profile) -> None:
         convector.process()
     else:
         raise ProcessingError("The path provided is neither a file nor a directory.")
+    
+def parse_filter_conditions(filter_conditions: str) -> List[FilterCondition]:
+    """
+    Parses the filter conditions string into a list of FilterCondition objects.
+    """
+    filter_objs = []
+    for condition in filter_conditions.split(';'):
+        match = re.match(r"([\w\.]+)(!=|==|=|<|>|<=>)?(.*)", condition.strip())
+        if match:
+            field, operator, value = match.groups()
+            filter_objs.append(FilterCondition(field=field, operator=operator, value=value))
+    return filter_objs
 
 @click.group()
 def convector():
@@ -110,7 +123,7 @@ def convector():
 @click.option('-i', '--input-key', 'input', help='Key for user inputs.')
 @click.option('-o', '--output-key', 'output', help='Key for bot responses.')
 @click.option('-s', '--schema', 'output_schema', default=None, help='Schema for output data.')
-@click.option('--label', 'labels', help='Columns to include in the output, separated by commas.')
+@click.option('--filter', 'filters', help='Filter conditions in the format "field,operator,value". Can be used multiple times.')
 @click.option('-l', '--limit', 'lines', type=int, help='Limit processing to this number of lines.')
 @click.option('--bytes', type=int, help='Limit processing to this number of bytes.')
 @click.option('-f', '--file-out', 'output_file', type=click.Path(), help='File to write the transformed data to.')
@@ -122,9 +135,9 @@ def process(ctx, file_path: str,
             is_conversation: bool, 
             input: Optional[str], 
             output: Optional[str], 
-            instruction: Optional[str], 
-            labels: Optional[str], 
-            lines: Optional[int], 
+            instruction: Optional[str],  
+            lines: Optional[int],
+            filters: Optional[str],
             bytes: Optional[int], 
             output_file: Optional[str], 
             output_dir: Optional[str], 
@@ -135,23 +148,6 @@ def process(ctx, file_path: str,
             output_schema: Optional[str]) -> None:
     """
     Process conversational data in FILE_PATH to a unified format.
-
-    Args:
-    file_path (str): The path to the conversational data file or directory.
-    conversation (bool): Flag to specify if the data is in a conversational format.
-    input (str): Key for user inputs in the data.
-    output (str): Key for bot outputs in the data.
-    instruction (str): Key for instructions or system messages in the data.
-    add (str): Comma-separated column names to keep in the transformed data.
-    lines (int): Number of lines to process from the file.
-    bytes (int): Number of bytes to process from the file.
-    output_file (str): Path to the output file where transformed data will be saved.
-    output_dir (str): Directory where the output file will be saved.
-    append (bool): Flag to append to or overwrite an existing file.
-    verbose (bool): Flag to enable verbose mode for detailed logs.
-    random (bool): Flag to randomly select lines from the file.
-    profile (str): Profile to use from the YAML config file.
-    output_schema (str): Output schema to use for the transformed data.
     
     Example:
         convector process <file_path> -c -i message -o response
@@ -174,7 +170,6 @@ def process(ctx, file_path: str,
             'input': input,
             'output': output,
             'instruction': instruction,
-            'labels': labels.split(',') if labels else None,
             'lines': lines,
             'bytes': bytes,
             'output_file': output_file,
@@ -191,6 +186,10 @@ def process(ctx, file_path: str,
         # Save the updated profile
         if selected_profile_name != 'default':
             config.save_profile_to_yaml(selected_profile_name)
+
+        if filters:
+            filters = parse_filter_conditions(filters)
+            selected_profile.filters = filters
 
         # Proceed with data processing
         process_conversational_data(Path(file_path), selected_profile)

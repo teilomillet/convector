@@ -1,3 +1,5 @@
+# zst_file_handler.py
+
 import logging
 import zstandard as zstd
 import io
@@ -19,13 +21,14 @@ class ZSTFileHandler(BaseFileHandler):
 
     def transform_data(self, original_data):
         """
-        Transforms a line of ZST file into the desired format.
+        Transforms a line of ZST file into the desired format and then processes it using handle_data.
         """
-        try:
-            return json.loads(original_data)
-        except json.JSONDecodeError as e:
-            logging.error(f"Error decoding JSON line: {original_data}. Error: {e}")
-            raise
+        # Decode JSON line if necessary
+        decoded_data = json.loads(original_data) if isinstance(original_data, str) else original_data
+        # Process data using handle_data from BaseFileHandler
+        processed_data = super().handle_data(decoded_data)
+        # Apply filters and schema here if needed before returning
+        return processed_data
 
     def handle_file(self) -> Generator[Dict[str, Any], None, None]:
         """

@@ -11,26 +11,47 @@ class IDataProcessor:
 class ConversationDataProcessor(IDataProcessor):
     def process(self, data: Dict[str, Any], **kwargs) -> List[Dict[str, Any]]:
         transformed_data = []
-        conversation_id = kwargs.get('conversation_id', uuid.uuid4().hex[:5])
-        conversation_data = data.get('data', [])
-        
-        for i in range(0, len(conversation_data), 2):
-            try:
-                user_input = conversation_data[i] if i < len(conversation_data) else ""
-                assistant_output = conversation_data[i+1] if i+1 < len(conversation_data) else ""
-                
-                transformed_data.append({
-                    "conversation_id": conversation_id,
-                    "instruction": "",
-                    "input": user_input,
-                    "output": assistant_output
-                })
-            except Exception as e:
-                logging.error(f"Error processing conversation pair at index {i}: {e}")
-                continue 
 
+        # Check if 'data' contains nested conversation data
+        if 'data' in data:
+            conversation_data = data.get('data', [])
+            # Process each conversation pair
+            for i in range(0, len(conversation_data), 2):
+                transformed_data.extend(self.extract_conversation_piece(conversation_data, i, data.get('conversation_id')))
+        else:
+            # If 'data' is already an individual conversation piece
+            transformed_data.append(data)
+
+        if not transformed_data:
+            logging.warning(f"No data transformed in ConversationDataProcessor for: {data}")
+            return []
+
+        logging.debug(f"Processed data in ConversationDataProcessor: {transformed_data}")
         return transformed_data
 
+    def extract_conversation_piece(self, conversation_data, index, conversation_id):
+        try:
+            user_input = conversation_data[index] if index < len(conversation_data) else ""
+            assistant_output = conversation_data[index + 1] if index + 1 < len(conversation_data) else ""
+
+            conversation_piece = {
+                "conversation_id": conversation_id,
+                "instruction": "",
+                "input": user_input,
+                "output": assistant_output
+            }
+
+            return [conversation_piece]
+
+        except Exception as e:
+            logging.error(f"Error processing conversation pair at index {index}: {e}")
+            return [] 
+            
+    
+    def transform_using_schema(self, conversation_piece, output_schema_handler):
+        if output_schema_handler:
+            return output_schema_handler.apply_schema(conversation_piece)
+        return conversation_piece
 
 
 class CustomKeysDataProcessor(IDataProcessor):
@@ -38,7 +59,6 @@ class CustomKeysDataProcessor(IDataProcessor):
         input_key = kwargs.get('input')
         output_key = kwargs.get('output')
         instruction_key = kwargs.get('instruction')
-        labels = kwargs.get('labels', [])  
         
         if not (input_key and output_key) or input_key not in data or output_key not in data:
             logging.error(f"The necessary keys are missing or do not match the data structure. Data keys: {list(data.keys())}")
@@ -49,9 +69,6 @@ class CustomKeysDataProcessor(IDataProcessor):
             "input": data.get(input_key, ""),
             "output": data.get(output_key, "")
         }
-        
-        for col in labels:
-            transformed_data[col] = data.get(col, "")
 
         return [transformed_data]
 
@@ -66,21 +83,36 @@ class AutoDetectDataProcessor(IDataProcessor):
         self.detected_schema = {}
 
     def process(self, data: Dict[str, Any], **kwargs) -> List[Dict[str, Any]]:
+        # Detect schema based on the data
         self.detect_schema(data)
+
+        # Check if the necessary keys are found
+        if not all(key in self.detected_schema for key in ['instruction', 'input', 'output']):
+            logging.error(f"Required keys not detected in data: {data.keys()}")
+            return []
 
         transformed_data = [{
             "instruction": data.get(self.detected_schema.get("instruction", ""), ""),
             "input": data.get(self.detected_schema.get("input", ""), ""),
             "output": data.get(self.detected_schema.get("output", ""), "")
-        }] if self.detected_schema else []
+        }]
 
         return transformed_data
 
     def detect_schema(self, data: Dict[str, Any]):
-        for key in data.keys():
-            for schema, variants in self.schema_patterns.items():
-                if key in variants:
-                    self.detected_schema[schema] = key
-                    break  
-            if len(self.detected_schema) == len(self.schema_patterns):
-                break
+        # Reset detected schema
+        self.detected_schema = {}
+
+        # Mapping for possible field names in the data
+        possible_field_names = {
+            "instruction": ["system_prompt", "instruction"],
+            "input": ["question", "input"],
+            "output": ["response", "output"]
+        }
+
+        # Detect and map the fields
+        for schema_key, possible_names in possible_field_names.items():
+            for field_name in possible_names:
+                if field_name in data:
+                    self.detected_schema[schema_key] = field_name
+                    break

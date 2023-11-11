@@ -1,6 +1,5 @@
 # csv_file_handler.py
 
-import json
 import csv
 import logging
 from typing import Generator, Dict, Any, Iterator
@@ -18,12 +17,12 @@ class CSVFileHandler(BaseFileHandler):
 
     def transform_data(self, original_data):
         """
-        Transforms a row from the CSV file. 
-        Override this method if a different transformation is required.
+        Transforms a row from the CSV file and processes it using handle_data.
         """
-        # Default transformation is to simply return the data as is.
-        # Custom transformation logic can be implemented here.
-        return original_data
+        # Process data using handle_data from BaseFileHandler
+        processed_data = super().handle_data(original_data)
+        # Apply filters and schema here if needed before returning
+        return processed_data
 
     def handle_file(self) -> Generator[Dict[str, Any], None, None]:
         """

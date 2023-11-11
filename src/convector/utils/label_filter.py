@@ -1,24 +1,23 @@
-# label_filter.py
-
 import re
-from typing import List, Dict, Any, Union
+from typing import List, Dict, Any
+import logging
 
 class Condition:
-    def __init__(self, field, operator=None, value=None):
-        self.field = field.split('.')  # Split the field into parts
+    """
+    This class represents a single condition in the filter.
+    It holds the field to be filtered, the operator, and the value to compare against.
+    """
+    def __init__(self, field: str, operator: str = None, value: Any = None):
+        self.field = field.split('.')
         self.operator = operator
         self.value = self.cast_value(value)
 
-    def __str__(self):
-        # This will convert the Condition object to a string in the format "field operator value"
-        # Adjust the format to match how you want to use the condition as a string
-        if self.operator and self.value:
-            return f"{self.field} {self.operator} {self.value}"
-        else:
-            return self.field  # If there's no operator or value, just return the field
-
-    def cast_value(self, value):
-        """ Try to cast the value to int or float, or keep as string if it fails """
+    @staticmethod
+    def cast_value(value: str) -> Any:
+        """
+        Attempts to cast the value to an int or float.
+        If casting fails, the value is returned as a string.
+        """
         try:
             return int(value)
         except ValueError:
@@ -27,43 +26,70 @@ class Condition:
             except ValueError:
                 return value
 
-    def get_nested_value(self, item, fields):
-        """ Recursively get the nested value """
+    @staticmethod
+    def get_nested_value(item: Dict, fields: List[str]) -> Any:
+        """
+        Recursively fetches the value from nested dictionaries based on the given fields.
+        """
         for field in fields:
             item = item.get(field, {})
         return item if item != {} else None
 
-    def apply(self, item):
+    def matches(self, item: Dict) -> bool:
         """
-        Get the value from the nested JSON
+        Checks if the item matches this condition.
         """
-        item_value = self.get_nested_value(item, self.field)
-        if item_value is None:
-            return False\
-            
-        # If there's no operator, it's just a field selection without a filter condition
+        # Special case for filter with only field specified
+        if self.operator is None and self.value in [None, '']:
+            return self.field_exists_in_item(item, self.field)
+        else:
+            item_value = self.get_nested_value(item, self.field)
+            if item_value is None:
+                logging.error(f"Field not found in item: {self.field}")
+
+                return False
+            item_value = self.cast_value(str(item_value))
+            return self.compare_values(item_value, self.value)
+
+    def field_exists_in_item(self, item: Dict, fields: List[str]) -> bool:
+        """
+        Checks if the specified fields exist in the item.
+        """
+        for field in fields:
+            if field not in item:
+                return False
+            item = item[field]
+        return True
+
+    def compare_values(self, item_value: Any, condition_value: Any) -> bool:
+        """
+        Compares the item's value against the condition's value based on the operator.
+        """
         if self.operator is None:
             return True
-
-        # Attempt to cast item value to int or float for comparison
-        item_value = self.cast_value(str(item_value))
-
-        # Compare based on the operator
-        if self.operator == "=":
-            return item_value == self.value
-        elif self.operator =="!=":
-            return item_value != self.value
+        elif self.operator in ["=", "=="]:
+            return item_value == condition_value
+        elif self.operator == "!=":
+            return item_value != condition_value
         elif self.operator == "<":
-            return item_value < self.value
+            return item_value < condition_value
         elif self.operator == ">":
-            return item_value > self.value
-        else:
-            return True
+            return item_value > condition_value
+        elif self.operator == "<=>":
+            lower, upper = map(self.cast_value, condition_value.split(','))
+            return lower <= item_value <= upper
+        return False
 
     @staticmethod
-    def parse_condition_string(spec):
-        """ Parses specification strings into field, operator, and value (if present)"""
-        match = re.match(r"([\w\.]+)(!=|[<>=])?(.*)", spec)
+    def parse(spec: str) -> 'Condition':
+        """
+        Parses a condition specification string into a Condition object.
+        """
+        if "<=>" in spec:
+            field, value = spec.split("<=>")
+            return Condition(field, "<=>", value)
+
+        match = re.match(r"([\w\.]+)(!=|==|=|<|>)?(.*)", spec)
         if not match:
             raise ValueError(f"Invalid specification string: {spec}")
 
@@ -71,28 +97,36 @@ class Condition:
         return Condition(field, operator, value)
 
 class LabelFilter:
+    """
+    This class handles the filtering of data based on a list of conditions.
+    """
     def __init__(self, specifications: List[str]):
-        """ Parses specifications into Condition objects"""
-        self.conditions = [Condition.parse_condition_string(spec) for spec in specifications]
+        self.conditions = [Condition.parse(spec) for spec in specifications]
 
+    def filter_data(self, data_batch: List[Dict]) -> List[Dict]:
+        """
+        Filters a batch of data items based on the defined conditions.
+        """
+        return [self.reduce_item(item) for item in data_batch if self.matches_all_conditions(item)]
 
-    def filter_data(self, data_batch):
-        """ Filters and reduces a batch of data items"""
-        filtered_batch = []
-        for item in data_batch:
-            reduced_item = {}
-            for condition in self.conditions:
-                # If it's a field to include without condition, we add it to reduced_item
-                if condition.operator is None:
-                    field_value = condition.get_nested_value(item, condition.field)
-                    if field_value is not None:
-                        reduced_item[".".join(condition.field)] = field_value
-                # If it's a condition with an operator and value
-                elif condition.apply(item):
-                    reduced_item[".".join(condition.field)] = condition.get_nested_value(item, condition.field)
+    def matches_all_conditions(self, item: Dict) -> bool:
+        """
+        Checks if an item satisfies all the conditions.
+        """
+        return all(condition.matches(item) for condition in self.conditions)
 
-            # Add item to the filtered batch if it meets all conditions or if it is just field selection
-            if all(condition.operator is None or condition.apply(item) for condition in self.conditions):
-                filtered_batch.append(reduced_item if reduced_item else item)
+    def reduce_item(self, item: Dict) -> Dict:
+        """
+        Reduces an item to only the fields that are specified in the conditions.
+        """
+        reduced_item = {}
+        for condition in self.conditions:
+            if condition.operator is None:
+                field_value = condition.get_nested_value(item, condition.field)
+                if field_value is not None:
+                    reduced_item[".".join(condition.field)] = field_value
+        return reduced_item if reduced_item else item
 
-        return filtered_batch
+# Usage Example:
+# filter = LabelFilter(["user_id>50", "conversation_id", "source=source1", "metadata.age<50", "metadata.temp <=> 1,3"])
+# filtered_data = filter.filter_data(data_batch)

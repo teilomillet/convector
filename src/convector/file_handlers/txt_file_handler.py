@@ -19,10 +19,12 @@ class TXTFileHandler(BaseFileHandler):
 
     def transform_data(self, original_data):
         """
-        Transforms a line of text file into the desired format. 
-        This can be overridden for custom transformation logic.
+        Transforms a line of text file into the desired format and then processes it using handle_data.
         """
-        return original_data.strip()  # Example transformation, strip leading/trailing spaces
+        # Strip leading/trailing spaces as an example transformation
+        processed_data = original_data.strip()
+        # Process the data using handle_data from BaseFileHandler
+        return super().handle_data(processed_data)
 
     def handle_file(self) -> Generator[Dict[str, Any], None, None]:
         """

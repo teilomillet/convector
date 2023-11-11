@@ -3,6 +3,11 @@ from typing import Optional, List
 from pathlib import Path
 import os
 
+class FilterCondition(BaseSettings):
+    field: str
+    operator: Optional[str] = None
+    value: Optional[str] = None
+
 class Profile(BaseSettings):
     """
     Represents a set of configurations for a particular processing profile.
@@ -13,7 +18,7 @@ class Profile(BaseSettings):
     input: Optional[str] = None  # Key for user inputs
     output: Optional[str] = None  # Key for bot responses
     instruction: Optional[str] = None  # Instruction/message key
-    labels: Optional[List[str]] = []  # Define 'add' as a list of strings  # Additional fields to be included
+    filters : Optional[List[FilterCondition]] = []
     lines: Optional[int] = None  # Line limit for processing
     bytes: Optional[int] = None  # Byte limit for processing
     append: bool = False  # Flag to append to an existing file

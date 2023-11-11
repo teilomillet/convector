@@ -1,3 +1,4 @@
+# convector.py
 import json
 import os
 import logging
@@ -7,11 +8,13 @@ from contextlib import contextmanager
 
 from convector.core.file_handler_factory import FileHandlerFactory
 from convector.utils.output_schema_handler import OutputSchemaHandler
-from convector.core.profile import Profile
+from convector.core.base_file_handler import BaseFileHandler
+from convector.core.profile import Profile, FilterCondition
+from convector.utils.label_filter import LabelFilter
 
 logging.basicConfig(level=logging.INFO)
 
-class FileHandler:
+class FileProcessing:
     def __init__(self, profile, file_handler):
         self.profile = profile
         self.file_handler = file_handler
@@ -44,24 +47,76 @@ class FileHandler:
         print(f"\nDelivered to file://{absolute_path} \n({lines_written} lines, {total_bytes_written} bytes)")
 
 class DataTransformer:
-    def __init__(self, profile, output_schema_handler):
+    def __init__(self, profile, output_schema_handler, file_handler):
         self.profile = profile
         self.output_schema_handler = output_schema_handler
+        self.file_handler = file_handler
 
     def transform_item(self, item):
-        """
-        Apply the transformation schema to the item.
-        """
-        if self.output_schema_handler is not None:
-            transformed_item = self.output_schema_handler.apply_schema(item, labels=self.profile.labels)
-        else:
-            transformed_item = item
+        logging.debug(f"Transforming item: {item}")
+        processed_item = self.file_handler.transform_data(item)
+        logging.debug(f"Processed item: {processed_item}")
 
-        # You could add additional transformation logic here if needed.
-        # For example, if there are other fields that need to be modified or added,
-        # you could do so before returning the transformed item.
 
-        return transformed_item
+        if not processed_item or not any(processed_item):  # Check if filtered_items is empty or contains empty dicts
+            return []  # Return empty list if no items to process
+
+        transformed_items = []
+        for item in processed_item:
+            if self.output_schema_handler is not None:
+                transformed_item = self.output_schema_handler.apply_schema(item)
+            else:
+                transformed_item = item
+            transformed_items.append(transformed_item)
+
+        logging.debug(f"transformed_items: {transformed_items}")
+        return transformed_items
+
+   
+class DataSaver:
+    def __init__(self, profile, output_file_path, data_transformer):
+        self.profile = profile
+        self.output_file_path = output_file_path
+        self.data_transformer = data_transformer
+        self.file_writer = FileWriter(output_file_path)
+
+    def save_data(self, transformed_data_generator, total_lines, bytes, append):
+        lines_written = 0
+        total_bytes_written = 0
+
+        with managed_progress_bar(total_lines or 0) as progress_bar:
+            for items in transformed_data_generator:
+                logging.debug(f"Items from generator: {items}")
+                # Check if items is a list and iterate through each item if so
+                if isinstance(items, list):
+                    for item in items:
+                        transformed_item = self.data_transformer.transform_item(item)
+                        logging.debug(f"Transformed item to be written: {transformed_item}")
+
+                        if isinstance(transformed_item, dict):
+                            self.file_writer.write_item(transformed_item)
+                        else:
+                            for single_item in transformed_item:
+                                self.file_writer.write_item(single_item)
+
+                        lines_written += 1
+                        progress_bar.update(1)
+
+                        if total_lines and lines_written >= total_lines:
+                            break
+                else:
+                    transformed_item = self.data_transformer.transform_item(items)
+                    logging.debug(f"Single transformed item to be written: {transformed_item}")
+
+                    self.file_writer.write_item(transformed_item)
+
+                    lines_written += 1
+                    progress_bar.update(1)
+
+                    if total_lines and lines_written >= total_lines:
+                        break
+        
+        self.file_writer.close() # Ensure the buffer is flushed at the end
     
 class FileWriter:
     def __init__(self, output_file_path, mode='a'):
@@ -70,8 +125,10 @@ class FileWriter:
         self.buffer = []
 
     def write_item(self, item):
+        # Log the item being written to the file
+        logging.debug(f"Writing item to file: {item}")
         self.buffer.append(json.dumps(item, ensure_ascii=False) + '\n')
-        if len(self.buffer) >= 100:  # Flush every 100 items
+        if len(self.buffer) >= 100:
             self.flush()
 
     def flush(self):
@@ -92,41 +149,12 @@ def managed_progress_bar(total_lines):
     finally:
         progress_bar.close()
 
-class DataSaver:
-    def __init__(self, profile, output_file_path, data_transformer):
-        self.profile = profile
-        self.output_file_path = output_file_path
-        self.data_transformer = data_transformer
-        self.file_writer = FileWriter(output_file_path)
-
-    def save_data(self, transformed_data_generator, total_lines, bytes, append):
-        lines_written = 0
-        total_bytes_written = 0
-
-        with managed_progress_bar(total_lines or 0) as progress_bar:
-            for items in transformed_data_generator:
-                if isinstance(items, dict):
-                    items = [items]
-                for item in items:
-                    transformed_item = self.data_transformer.transform_item(item)
-                    self.file_writer.write_item(transformed_item)
-
-                    lines_written += 1
-                    # Update the progress bar and bytes written as needed...
-                    progress_bar.update(1)
-
-                    if total_lines and lines_written >= total_lines:
-                        break
-                    # More conditions based on bytes or other stopping criteria...
-        
-        self.file_writer.close()  # Ensure the buffer is flushed at the end
-
-
 class ProcessingOrchestrator:
-    def __init__(self, profile, file_handler_module, data_transformer):
+    def __init__(self, profile, file_handler_module, data_transformer, output_schema_handler):
         self.profile = profile
         self.file_handler_module = file_handler_module
         self.data_transformer = data_transformer
+        self.output_schema_handler = output_schema_handler
 
     def orchestrate(self):
         if not self.file_handler_module.validate_input_file():
@@ -134,6 +162,11 @@ class ProcessingOrchestrator:
 
         logging.info("Starting processing...")
         output_file_path = self.file_handler_module.get_output_file_path()
+
+        # Correctly initialize the DataTransformer with the file handler and output schema handler
+        self.data_transformer = DataTransformer(self.profile, self.output_schema_handler, self.file_handler_module.file_handler)
+
+        # Start processing the file
         transformed_data_generator = self.file_handler_module.file_handler.handle_file()
 
         data_saver = DataSaver(
@@ -147,6 +180,7 @@ class ProcessingOrchestrator:
             bytes=self.profile.bytes,
             append=self.profile.append
         )
+        
         logging.info("Data processing and saving complete.")
 
 class Convector:
@@ -162,15 +196,15 @@ class Convector:
         # FileHandlerFactory creates an appropriate file handler based on the file_path and profile.
         self.file_handler = FileHandlerFactory.create_file_handler(file_path, profile)
         # OutputSchemaHandler is initialized here and will be passed where needed.
-        self.output_schema_handler = OutputSchemaHandler(profile.output_schema, labels=profile.labels)
+        self.output_schema_handler = OutputSchemaHandler(profile.output_schema, filters=profile.filters)
 
         # The FileHandler module handles file validation and getting the output file path.
-        self.file_handler_module = FileHandler(profile, self.file_handler)
+        self.file_handler_module = FileProcessing(profile, self.file_handler)
         # The DataTransformer module will be responsible for transforming the data according to the schema.
-        self.data_transformer = DataTransformer(profile, self.output_schema_handler)
+        self.data_transformer = DataTransformer(profile, self.output_schema_handler, self.file_handler)
 
     def process(self):
         # Processing is now delegated to the ProcessingOrchestrator.
-        orchestrator = ProcessingOrchestrator(self.profile, self.file_handler_module, self.data_transformer)
+        orchestrator = ProcessingOrchestrator(self.profile, self.file_handler_module, self.data_transformer, self.output_schema_handler)
         orchestrator.orchestrate()
 

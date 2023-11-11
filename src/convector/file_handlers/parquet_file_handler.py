@@ -1,8 +1,7 @@
 # parquet_file_handler.py
 
-import logging
-import json
 import pandas as pd
+import logging
 from typing import Generator, Dict, Any, Iterator
 from convector.core.base_file_handler import BaseFileHandler
 
@@ -22,10 +21,12 @@ class ParquetFileHandler(BaseFileHandler):
 
     def transform_data(self, original_data):
         """
-        Transforms a row of Parquet file into the desired format. In this case,
-        the data is already in a dictionary format, so it can be returned directly.
+        Transforms a row of Parquet file into the desired format and then processes it using handle_data.
         """
-        return original_data
+        # Process data using handle_data from BaseFileHandler
+        processed_data = super().handle_data(original_data)
+        # Apply filters and schema here if needed before returning
+        return processed_data
 
     def handle_file(self) -> Generator[Dict[str, Any], None, None]:
         """

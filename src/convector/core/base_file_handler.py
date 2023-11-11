@@ -5,11 +5,13 @@ from abc import ABC, abstractmethod
 from typing import Generator, Dict, Any, Iterator
 import logging
 import re
+import dateutil.parser
 
 from ..data_processors.data_processors import IDataProcessor, ConversationDataProcessor, CustomKeysDataProcessor, AutoDetectDataProcessor
 from ..utils.random_selector import IRandomSelector, LineRandomSelector, ByteRandomSelector, ConversationRandomSelector
 from convector.core.convector_config import ConvectorConfig
 from convector.core.profile import Profile
+from convector.utils.label_filter import LabelFilter
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -27,11 +29,12 @@ class BaseFileHandler(ABC):
         self.input = profile.input
         self.output = profile.output
         self.instruction = profile.instruction
-        self.labels = profile.labels
+        self.filters = profile.filters
         self.lines = profile.lines
         self.bytes = profile.bytes
         self.random_selection = profile.random
         self.data_processor: IDataProcessor = None
+
         logging.debug(f"BaseFileHandler initialized with is_conversation: {profile.is_conversation}")
 
     def filter_lines(self, lines: Iterator) -> Iterator:
@@ -154,19 +157,16 @@ class BaseFileHandler(ABC):
         return bool(user_keywords) and bool(assistant_keywords)
 
     def handle_data(self, data):
-        """
-        Chooses the appropriate data processor and processes the data.
-        """
+        # Process data that meets the criteria
         self.choose_data_processor()
-        return self.data_processor.process(data, input=self.input, output=self.output, instruction=self.instruction, labels=self.labels)
+        return self.data_processor.process(data,input=self.input, output=self.output, instruction=self.instruction)
 
     def choose_data_processor(self):
-        """
-        Chooses the appropriate data processor based on the data type and configuration.
-        """
+        """Chooses the appropriate data processor based on the data type and configuration."""
         if self.is_conversation:
             self.data_processor = ConversationDataProcessor()
         elif self.input and self.output:
             self.data_processor = CustomKeysDataProcessor()
         else:
             self.data_processor = AutoDetectDataProcessor()
+

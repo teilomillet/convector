@@ -15,10 +15,15 @@ class JSONFileHandler(BaseFileHandler):
 
     def transform_data(self, original_data):
         """
-        Transforms a line of JSON data into the desired format.
+        Transforms a line of JSON data into the desired format and then processes it using handle_data.
         """
         try:
-            return json.loads(original_data)
+            # Decode JSON line if necessary
+            decoded_data = json.loads(original_data) if isinstance(original_data, str) else original_data
+            # Process data using handle_data from BaseFileHandler
+            processed_data = super().handle_data(decoded_data)
+            # Apply filters and schema here if needed before returning
+            return processed_data
         except json.JSONDecodeError as e:
             logging.error(f"Error decoding JSON line: {original_data}. Error: {e}")
             raise
