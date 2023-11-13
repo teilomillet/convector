@@ -9,39 +9,83 @@ class IDataProcessor:
         raise NotImplementedError("This method should be implemented by subclass")
 
 class ConversationDataProcessor(IDataProcessor):
-    def process(self, data: Dict[str, Any], **kwargs) -> List[Dict[str, Any]]:
+    def process(self, data: Any, **kwargs) -> List[Dict[str, Any]]:
         fields_to_include = kwargs.get('fields_to_include', [])
         transformed_data = []
 
-        # Generate a conversation ID once per conversation
-        conversation_id = data.get('conversation_id', uuid.uuid4().hex[:5])
+        # Check if data is a list and process each item in the list
+        if isinstance(data, list):
+            for item in data:
+                transformed_data.extend(self.process_single_item(item, fields_to_include))
+        elif isinstance(data, dict):
+            # Process a single item
+            transformed_data.extend(self.process_single_item(data, fields_to_include))
+        else:
+            logging.error(f"Unexpected data type: {type(data)}")
+            return []
 
-        if 'data' in data:
-            conversation_data = data.get('data', [])
+        return transformed_data
+
+    def process_single_item(self, item: Dict[str, Any], fields_to_include: List[str]) -> List[Dict[str, Any]]:
+        transformed_data = []
+        conversation_id = item.get('conversation_id', uuid.uuid4().hex[:5])
+        system_prompt = item.get('system_prompt', '') 
+
+        if 'conversations' in item:
+            # Initialize variables to store the human input and GPT output
+            human_input, gpt_output = "", ""
+
+            for conv in item['conversations']:
+                if conv.get('from') == 'human':
+                    human_input = conv.get('value', '')
+                elif conv.get('from') == 'gpt':
+                    gpt_output = conv.get('value', '')
+
+                    # Create a conversation piece with system_prompt as instruction
+                    conversation_piece = {
+                        "conversation_id": conversation_id,
+                        "instruction": system_prompt,  # Use the system prompt here
+                        "input": human_input,
+                        "output": gpt_output
+                    }
+                    transformed_data.append(conversation_piece)
+
+                    # Reset human_input and gpt_output for the next pair
+                    human_input, gpt_output = "", ""
+
+        elif 'data' in item:
+            # Process the existing structure
+            conversation_data = item['data']
             for i in range(0, len(conversation_data), 2):
-                # Use the same conversation_id for each pair
                 transformed_data.extend(self.extract_conversation_piece(conversation_data, i, conversation_id))
         else:
-            # For individual conversation pieces, use the generated conversation_id
-            data['conversation_id'] = conversation_id
-            transformed_data.append(data)
+            # Process a single conversation piece
+            item['conversation_id'] = conversation_id
+            transformed_data.append(item)
 
         if not transformed_data:
-            logging.warning(f"No data transformed in ConversationDataProcessor for: {data}")
+            logging.warning(f"No data transformed in ConversationDataProcessor for: {item}")
             return []
 
         # Include specified fields if present
-        for item in transformed_data:
+        for data_item in transformed_data:
             for field in fields_to_include:
-                if field in data:
-                    item[field] = data[field]
+                if field in item:
+                    data_item[field] = item[field]
 
         return transformed_data
 
     def extract_conversation_piece(self, conversation_data, index, conversation_id):
         try:
-            user_input = conversation_data[index] if index < len(conversation_data) else ""
-            assistant_output = conversation_data[index + 1] if index + 1 < len(conversation_data) else ""
+            # Initialize user input and assistant output
+            user_input, assistant_output = "", ""
+
+            # Ensure that we are accessing valid indices
+            if index < len(conversation_data):
+                user_input = conversation_data[index]
+                # Check if the next element exists and is for the assistant's response
+                if index + 1 < len(conversation_data):
+                    assistant_output = conversation_data[index + 1]
 
             conversation_piece = {
                 "conversation_id": conversation_id,
@@ -53,14 +97,8 @@ class ConversationDataProcessor(IDataProcessor):
             return [conversation_piece]
 
         except Exception as e:
-            logging.error(f"Error processing conversation pair at index {index}: {e}")
-            return [] 
-            
-    
-    def transform_using_schema(self, conversation_piece, output_schema_handler):
-        if output_schema_handler:
-            return output_schema_handler.apply_schema(conversation_piece)
-        return conversation_piece
+            logging.error(f"Error processing conversation data: {e}")
+            return []
 
 class CustomKeysDataProcessor(IDataProcessor):
     def process(self, data: Dict[str, Any], **kwargs) -> List[Dict[str, Any]]:

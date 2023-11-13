@@ -137,6 +137,7 @@ class BaseFileHandler(ABC):
 
     def handle_data(self, data):
         fields_to_include = [condition.field for condition in self.filters]
+        # logging.debug(f"data before handle_data: {data}")
         # Process data that meets the criteria
         self.choose_data_processor()
         return self.data_processor.process(data,input=self.input, output=self.output, instruction=self.instruction, fields_to_include=fields_to_include)

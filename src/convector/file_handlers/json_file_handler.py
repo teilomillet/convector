@@ -16,12 +16,25 @@ class JSONFileHandler(BaseFileHandler):
         """
         try:
             with open(self.file_path, 'r', encoding='utf-8') as file:
-                data = json.load(file)
+                file_content = file.read()
+
+                # Parsing the JSON content
+                data = json.loads(file_content)
+
+                # Handling both list and dictionary types of JSON
                 if isinstance(data, list):
+                    # Iterate and yield each item if data is a list
                     for item in data:
                         yield item
-                else:
+                elif isinstance(data, dict):
+                    # Yield the entire dictionary if data is a single dict
                     yield data
+                else:
+                    logging.error(f"Invalid JSON format in file {self.file_path}")
+                    # Optionally, raise an exception or handle this case as needed
+        except json.JSONDecodeError as e:
+            logging.error(f"JSON decoding error in file {self.file_path}: {e}")
+            raise
         except Exception as e:
             logging.error(f"Failed to read the JSON file at {self.file_path}: {e}")
             raise
@@ -41,9 +54,9 @@ class JSONFileHandler(BaseFileHandler):
         transformed data objects.
         """
         try:
-            for transformed_item in super().handle_file():
+            for transformed_item in self.read_file():
                 if transformed_item is not None:
-                    yield transformed_item
+                    yield self.transform_data(transformed_item)
         except Exception as e:
             logging.error(f"An error occurred while handling the JSON file: {e}")
             raise
