@@ -45,9 +45,9 @@
     convector process /data.jsonl -c --filter id<10500 -f output.jsonl -d /output_dir/
     ```
   ---------------------------------------
-  - Process the file `data.parquet` and output the data into a `chat_completion` format with the `user_id` at each row. (the output data will be saved in `data_tr.jsonl` inside the default output location (convector/silo)):
+  - Process the file `data.parquet` and output the data into a `chat_completion` format with the `id` and `user_id` at each row. (the output data will be saved in `data_tr.jsonl` inside the default output location (convector/silo)):
     ```bash
-    convector process /data.parquet --filter user_id --schema chat_completion
+    convector process /data.parquet --filter "id;user_id" --schema chat_completion
     ```
   ---------------------------------------
   - Register a profile name `sampler`, process `333` lines of the file `data.parquet` and save the output into a `chat_completion` format in a file name `sampler.jsonl`:
@@ -73,7 +73,7 @@
     ```json
     {"instruction":"","input":"","output":"","source":""}
     ```
-  - Chat Completion Schema:
+  - Chat_completion Schema:
     ```json
     "messages": [
         {"role": "system", "content": ""},
