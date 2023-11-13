@@ -70,13 +70,13 @@ class FileWriter:
     def __init__(self, output_file_path, mode='a', source=None):
         self.output_file_path = output_file_path
         self.mode = mode
-        self.source = source  # The source file name
+        self.source = source  # The origin file name
         self.buffer = []
 
     def write_item(self, item):
-        item_with_source = item.copy()  # Copy the item
-        item_with_source['source'] = self.source  # Add the 'source' field
-        self.buffer.append(json.dumps(item_with_source, ensure_ascii=False) + '\n')
+        item_with_origin = item.copy()  # Copy the item
+        item_with_origin['origin'] = self.source  # Add the 'source' field
+        self.buffer.append(json.dumps(item_with_origin, ensure_ascii=False) + '\n')
         if len(self.buffer) >= 100:
             self.flush()
 
